@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 244, 244, 246;
+  --background: #0e0f14;
+  --background-start-rgb: 14, 15, 20;
+  --background-end-rgb: 14, 15, 20;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: var(--background);
+  overflow: hidden;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Scrollbar styling for order book */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
