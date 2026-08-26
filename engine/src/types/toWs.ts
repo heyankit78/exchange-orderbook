@@ -29,6 +29,12 @@ export type WsMessage = {
         s: string;
       }
     | {
+        e: "order_update";
+        orderId: string;
+        filled: number;
+        status: "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
+      }
+    | {
         // PRIVATE USER TRADE
         e: "my_trade";
         t: string;

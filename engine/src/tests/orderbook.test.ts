@@ -14,10 +14,11 @@ describe("Simple orders", () => {
       userId: "1",
     };
 
-    const { fills, executedQty } = orderbook.addOrder(order);
+    const { fills, executedQuantity: executedQuantity } =
+      orderbook.addOrder(order);
 
     expect(fills.length).toBe(0);
-    expect(executedQty).toBe(0);
+    expect(executedQuantity).toBe(0);
   });
 
   it("Can be partially filled", () => {
@@ -47,10 +48,10 @@ describe("Simple orders", () => {
       userId: "2",
     };
 
-    const { fills, executedQty } = orderbook.addOrder(order);
+    const { fills, executedQuantity } = orderbook.addOrder(order);
 
     expect(fills.length).toBe(1);
-    expect(executedQty).toBe(1);
+    expect(executedQuantity).toBe(1);
   });
 
   it("Can be partially filled", () => {
@@ -89,10 +90,10 @@ describe("Simple orders", () => {
       userId: "3",
     };
 
-    const { fills, executedQty } = orderbook.addOrder(order);
+    const { fills, executedQuantity } = orderbook.addOrder(order);
 
     expect(fills.length).toBe(1);
-    expect(executedQty).toBe(1);
+    expect(executedQuantity).toBe(1);
     expect(orderbook.bids.length).toBe(2);
     expect(orderbook.asks.length).toBe(0);
   });
@@ -135,10 +136,10 @@ describe("Self trade prevention", () => {
       userId: "3",
     };
 
-    const { fills, executedQty } = orderbook.addOrder(order);
+    const { fills, executedQuantity } = orderbook.addOrder(order);
 
     expect(fills.length).toBe(0);
-    expect(executedQty).toBe(0);
+    expect(executedQuantity).toBe(0);
   });
 });
 
@@ -179,7 +180,7 @@ describe("Precission errors are taken care of", () => {
       userId: "3",
     };
 
-    const { fills, executedQty } = orderbook.addOrder(order);
+    const { fills, executedQuantity } = orderbook.addOrder(order);
 
     expect(fills.length).toBe(1);
     expect(orderbook.bids.length).toBe(0);

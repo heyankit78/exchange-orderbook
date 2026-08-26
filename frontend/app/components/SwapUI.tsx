@@ -28,8 +28,7 @@ export function SwapUI({ market }: { market: string }) {
   const [type, setType] = useState("limit");
 
   const [loading, setLoading] = useState(false);
-
-  const [balances, setBalances] = useState<Balances>({});
+  const [balances, setBalances] = useState<Balances | null>(null);
 
   const [balanceLoading, setBalanceLoading] = useState(true);
 
@@ -60,16 +59,24 @@ export function SwapUI({ market }: { market: string }) {
   // ----------------------------------------
 
   const fetchBalance = async () => {
+    if (!session?.accessToken) {
+      console.log("❌ BALANCE: no access token");
+      return;
+    }
     if (!session?.accessToken) return;
 
     try {
       setBalanceLoading(true);
 
+      console.log("1️⃣ FETCHING BALANCE");
+
       const data = await getBalance(session.accessToken);
+
+      console.log("2️⃣ BALANCE API RESPONSE:", data);
 
       setBalances(data);
     } catch (error) {
-      console.error("Failed to fetch balance:", error);
+      console.error("❌ Failed to fetch balance:", error);
     } finally {
       setBalanceLoading(false);
     }
@@ -194,13 +201,35 @@ export function SwapUI({ market }: { market: string }) {
 
     signaling.registerCallback("my_trade", handleMyTrade, callbackId);
 
+    console.log("SUBSCRIBING PRIVATE TRADE:", userId, `user_trades@${userId}`);
     signaling.sendMessage({
       method: "SUBSCRIBE",
       params: [`user_trades@${userId}`],
     });
+    signaling.registerCallback(
+      "order_update",
+      (update: { orderId: string; filled: number; status: string }) => {
+        console.log("🔥 SWAP UI ORDER UPDATE:", update);
+        setOpenOrders((prev) => {
+          if (update.status === "FILLED") {
+            return prev.filter((order) => order.orderId !== update.orderId);
+          }
 
+          return prev.map((order) =>
+            order.orderId === update.orderId
+              ? {
+                  ...order,
+                  filled: update.filled,
+                }
+              : order,
+          );
+        });
+      },
+      `OPEN-ORDER-${userId}`,
+    );
     return () => {
       signaling.deRegisterCallback("my_trade", callbackId);
+      signaling.deRegisterCallback("order_update", `OPEN-ORDER-${userId}`);
 
       signaling.sendMessage({
         method: "UNSUBSCRIBE",
@@ -253,7 +282,9 @@ export function SwapUI({ market }: { market: string }) {
 
   const balanceAsset = activeTab === "buy" ? quoteAsset : baseAsset;
 
-  const availableBalance = balances?.[balanceAsset]?.available ?? 0;
+  const assetBalance = balances?.[balanceAsset];
+
+  const availableBalance = assetBalance?.available;
 
   const requiredBalance =
     activeTab === "buy" ? Number(price) * Number(quantity) : Number(quantity);
@@ -293,7 +324,7 @@ export function SwapUI({ market }: { market: string }) {
                   </p>
 
                   <p className="font-medium text-xs text-baseTextHighEmphasis">
-                    {balanceLoading
+                    {balanceLoading || availableBalance === undefined
                       ? "Loading..."
                       : `${availableBalance.toFixed(2)} ${balanceAsset}`}
                   </p>

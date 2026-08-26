@@ -12,10 +12,13 @@ export interface Order {
 
 export interface Fill {
   price: string;
-  qty: number;
+  quantity: number;
   tradeId: string;
-  otherUserId: string;
-  markerOrderId: string;
+  makerUserId: string;
+  makerOrderId: string;
+
+  makerFilledQuantity: number;
+  makerOrderQuantity: number;
 }
 
 export class Orderbook {
@@ -63,58 +66,72 @@ export class Orderbook {
 
   //TODO: Add self trade prevention
   addOrder(order: Order): {
-    executedQty: number;
+    executedQuantity: number;
     fills: Fill[];
   } {
     if (order.side === "buy") {
-      const { executedQty, fills } = this.matchBid(order);
-      order.filled = executedQty;
-      if (executedQty === order.quantity) {
+      const { executedQuantity, fills } = this.matchBid(order);
+      order.filled = executedQuantity;
+      if (executedQuantity === order.quantity) {
         return {
-          executedQty,
+          executedQuantity,
           fills,
         };
       }
       this.bids.push(order);
       return {
-        executedQty,
+        executedQuantity,
         fills,
       };
     } else {
-      const { executedQty, fills } = this.matchAsk(order);
-      order.filled = executedQty;
-      if (executedQty === order.quantity) {
+      const { executedQuantity, fills } = this.matchAsk(order);
+      order.filled = executedQuantity;
+      if (executedQuantity === order.quantity) {
         return {
-          executedQty,
+          executedQuantity,
           fills,
         };
       }
       this.asks.push(order);
       return {
-        executedQty,
+        executedQuantity,
         fills,
       };
     }
   }
 
-  matchBid(order: Order): { fills: Fill[]; executedQty: number } {
+  matchBid(order: Order): { fills: Fill[]; executedQuantity: number } {
     const fills: Fill[] = [];
-    let executedQty = 0;
+    let executedQuantity = 0;
 
+    this.asks.sort((a, b) => a.price - b.price);
     for (let i = 0; i < this.asks.length; i++) {
-      if (this.asks[i].price <= order.price && executedQty < order.quantity) {
-        const filledQty = Math.min(
-          order.quantity - executedQty,
-          this.asks[i].quantity,
+      if (this.asks[i].userId === order.userId) {
+        continue;
+      }
+      if (
+        this.asks[i].price <= order.price &&
+        executedQuantity < order.quantity
+      ) {
+        const makerRemainingQuantity =
+          this.asks[i].quantity - this.asks[i].filled;
+
+        const filledQuantity = Math.min(
+          order.quantity - executedQuantity,
+          makerRemainingQuantity,
         );
-        executedQty += filledQty;
-        this.asks[i].filled += filledQty;
+        executedQuantity += filledQuantity;
+        this.asks[i].filled += filledQuantity;
+
         fills.push({
           price: this.asks[i].price.toString(),
-          qty: filledQty,
+          quantity: filledQuantity,
           tradeId: randomUUID(),
-          otherUserId: this.asks[i].userId,
-          markerOrderId: this.asks[i].orderId,
+          makerUserId: this.asks[i].userId,
+          makerOrderId: this.asks[i].orderId,
+
+          makerFilledQuantity: this.asks[i].filled,
+          makerOrderQuantity: this.asks[i].quantity,
         });
       }
     }
@@ -126,28 +143,41 @@ export class Orderbook {
     }
     return {
       fills,
-      executedQty,
+      executedQuantity,
     };
   }
 
-  matchAsk(order: Order): { fills: Fill[]; executedQty: number } {
+  matchAsk(order: Order): { fills: Fill[]; executedQuantity: number } {
     const fills: Fill[] = [];
-    let executedQty = 0;
-
+    let executedQuantity = 0;
+    this.bids.sort((a, b) => b.price - a.price);
     for (let i = 0; i < this.bids.length; i++) {
-      if (this.bids[i].price >= order.price && executedQty < order.quantity) {
-        const amountRemaining = Math.min(
-          order.quantity - executedQty,
-          this.bids[i].quantity,
+      if (this.bids[i].userId === order.userId) {
+        continue;
+      }
+      if (
+        this.bids[i].price >= order.price &&
+        executedQuantity < order.quantity
+      ) {
+        const makerRemainingQuantity =
+          this.bids[i].quantity - this.bids[i].filled;
+
+        const filledQuantity = Math.min(
+          order.quantity - executedQuantity,
+          makerRemainingQuantity,
         );
-        executedQty += amountRemaining;
-        this.bids[i].filled += amountRemaining;
+        executedQuantity += filledQuantity;
+        this.bids[i].filled += filledQuantity;
+
         fills.push({
           price: this.bids[i].price.toString(),
-          qty: amountRemaining,
+          quantity: filledQuantity,
           tradeId: randomUUID(),
-          otherUserId: this.bids[i].userId,
-          markerOrderId: this.bids[i].orderId,
+          makerUserId: this.bids[i].userId,
+          makerOrderId: this.bids[i].orderId,
+
+          makerFilledQuantity: this.bids[i].filled,
+          makerOrderQuantity: this.bids[i].quantity,
         });
       }
     }
@@ -159,7 +189,7 @@ export class Orderbook {
     }
     return {
       fills,
-      executedQty,
+      executedQuantity,
     };
   }
 
@@ -232,5 +262,5 @@ export class Orderbook {
       return price;
     }
   }
-  // return executedQty,fi
+  // return executedQuantity,fi
 }

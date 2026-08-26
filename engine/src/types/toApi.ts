@@ -18,10 +18,10 @@ export type MessageToApi =
       type: "ORDER_PLACED";
       payload: {
         orderId: string;
-        executedQty: number;
+        executedQuantity: number;
         fills: {
           price: string;
-          qty: number;
+          quantity: number;
           tradeId: string;
         }[];
       };
@@ -30,7 +30,7 @@ export type MessageToApi =
       type: "ORDER_CANCELLED";
       payload: {
         orderId: string;
-        executedQty: number;
+        executedQuantity: number;
         remainingQty: number;
         error?: string;
       };

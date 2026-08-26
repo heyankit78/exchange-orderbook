@@ -14,15 +14,15 @@ function mergeLevels(
 ): [string, string][] {
   // Convert current to a Map for fast lookup
   const map = new Map<string, string>();
-  for (const [price, qty] of current) {
-    map.set(price, qty);
+  for (const [price, quantity] of current) {
+    map.set(price, quantity);
   }
   // Apply every update — qty of "0" means remove the level
-  for (const [price, qty] of updates || []) {
-    if (Number(qty) === 0) {
+  for (const [price, quantity] of updates || []) {
+    if (Number(quantity) === 0) {
       map.delete(price);
     } else {
-      map.set(price, qty);
+      map.set(price, quantity);
     }
   }
   return Array.from(map.entries());

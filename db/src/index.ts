@@ -81,7 +81,7 @@ async function main() {
         price,
         quantity,
         side,
-        executedQty,
+        executedQuantity,
         cancelled,
       } = data.data;
 
@@ -105,7 +105,7 @@ async function main() {
         // Has userId → this is a new order being inserted
         if (userId && market && price && quantity && side) {
           const qty = Number(quantity);
-          const filled = Number(executedQty);
+          const filled = Number(executedQuantity);
 
           let orderStatus = "OPEN";
           if (filled > 0 && filled < qty) orderStatus = "PARTIALLY_FILLED";
@@ -142,7 +142,7 @@ async function main() {
 
           const totalQty = Number(result.rows[0].quantity);
           const oldFilled = Number(result.rows[0].filled);
-          const newFilled = oldFilled + Number(executedQty);
+          const newFilled = oldFilled + Number(executedQuantity);
           const orderStatus =
             newFilled >= totalQty ? "FILLED" : "PARTIALLY_FILLED";
 

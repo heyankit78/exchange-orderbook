@@ -36,6 +36,7 @@ export class SignalingManager {
     this.ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
       const type = message.data.e;
+      console.log("🔥 WS RAW EVENT:", type, message.data);
       if (this.callbacks[type]) {
         this.callbacks[type].forEach(({ callback }) => {
           if (type === "ticker") {
@@ -76,6 +77,15 @@ export class SignalingManager {
               ).toString(),
               side: message.data.side,
               createdAt: new Date(message.data.timestamp).toISOString(),
+            });
+          }
+          if (type === "order_update") {
+            console.log("🔥 SIGNALING ORDER UPDATE:", message.data);
+
+            callback({
+              orderId: message.data.orderId,
+              filled: message.data.filled,
+              status: message.data.status,
             });
           }
         });

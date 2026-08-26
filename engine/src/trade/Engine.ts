@@ -161,7 +161,7 @@ export class Engine {
     switch (message.type) {
       case CREATE_ORDER:
         try {
-          const { executedQty, fills, orderId } = this.createOrder(
+          const { executedQuantity, fills, orderId } = this.createOrder(
             message.data.market,
             message.data.price,
             message.data.quantity,
@@ -170,7 +170,7 @@ export class Engine {
           );
           RedisManager.getInstance().sendToApi(clientId, {
             type: "ORDER_PLACED",
-            payload: { orderId, executedQty, fills },
+            payload: { orderId, executedQuantity, fills },
           });
         } catch (e) {
           const msg = e instanceof Error ? e.message : "Unable to place order";
@@ -180,7 +180,7 @@ export class Engine {
             type: "ORDER_CANCELLED",
             payload: {
               orderId: "",
-              executedQty: 0,
+              executedQuantity: 0,
               remainingQty: 0,
               error: msg,
             },
@@ -224,7 +224,7 @@ export class Engine {
             type: ORDER_UPDATE,
             data: {
               orderId,
-              executedQty: order.filled,
+              executedQuantity: order.filled,
               cancelled: true,
             },
           });
@@ -232,7 +232,7 @@ export class Engine {
             type: "ORDER_CANCELLED",
             payload: {
               orderId,
-              executedQty: order.filled,
+              executedQuantity: order.filled,
               remainingQty: order.quantity - order.filled,
             },
           });
@@ -340,7 +340,7 @@ export class Engine {
     price: string,
     quantity: string,
     side: "buy" | "sell",
-    userId: string,
+    takerUserId: string,
   ) {
     const orderbook = this.orderbooks.find((o) => o.ticker() === market);
     const baseAsset = market.split("_")[0];
@@ -351,8 +351,7 @@ export class Engine {
       baseAsset,
       quoteAsset,
       side,
-      userId,
-      quoteAsset,
+      takerUserId,
       price,
       quantity,
     );
@@ -365,41 +364,82 @@ export class Engine {
         Math.random().toString(36).substring(2, 15),
       filled: 0,
       side,
-      userId,
+      userId: takerUserId,
     };
 
-    const { fills, executedQty } = orderbook.addOrder(order);
+    const { fills, executedQuantity } = orderbook.addOrder(order);
 
-    this.updateBalance(userId, baseAsset, quoteAsset, side, fills, executedQty);
+    this.updateBalance(
+      takerUserId,
+      baseAsset,
+      quoteAsset,
+      side,
+      fills,
+      Number(price),
+    );
 
-    this.createDbTrades(side, fills, market, userId);
-    this.updateDbOrders(order, executedQty, fills, market);
+    this.createDbTrades(side, fills, market, takerUserId);
+    this.updateDbOrders(order, executedQuantity, fills, market);
     this.publisWsDepthUpdates(fills, price, side, market);
-    this.publishWsTrades(fills, userId, market);
-    this.publishUserTradeUpdates(side, fills, market, userId);
-    return { executedQty, fills, orderId: order.orderId };
+    this.publishUserOrderUpdates(fills);
+    this.publishWsTrades(side, fills, market);
+    this.publishUserTradeUpdates(side, fills, market, takerUserId);
+    return { executedQuantity, fills, orderId: order.orderId };
   }
+  publishUserOrderUpdates(fills: Fill[]) {
+    fills.forEach((fill) => {
+      const status =
+        fill.makerFilledQuantity >= fill.makerOrderQuantity
+          ? "FILLED"
+          : "PARTIALLY_FILLED";
 
+      RedisManager.getInstance().publishMessage(
+        `user_trades@${fill.makerUserId}`,
+        {
+          stream: `user_trades@${fill.makerUserId}`,
+          data: {
+            e: "order_update",
+            orderId: fill.makerOrderId,
+            filled: fill.makerFilledQuantity,
+            status,
+          },
+        },
+      );
+    });
+  }
   publishUserTradeUpdates(
     side: "buy" | "sell",
     fills: Fill[],
     market: string,
-    userId: string,
+    takerUserId: string,
   ) {
     fills.forEach((fill) => {
-      const buyerUserId = side === "buy" ? userId : fill.otherUserId;
+      const buyerUserId = side === "buy" ? takerUserId : fill.makerUserId;
 
-      const sellerUserId = side === "sell" ? userId : fill.otherUserId;
+      const sellerUserId = side === "sell" ? takerUserId : fill.makerUserId;
 
       const commonData = {
         e: "my_trade",
         t: fill.tradeId,
         p: fill.price,
-        q: fill.qty.toString(),
+        q: fill.quantity.toString(),
         s: market,
         timestamp: Date.now(),
       } as const;
 
+      console.log("BUYER CHANNEL:", `user_trades@${buyerUserId}`);
+      console.log("SELLER CHANNEL:", `user_trades@${sellerUserId}`);
+
+      console.log("🔥 PRIVATE TRADE USERS", {
+        incomingUser: takerUserId,
+        otherUser: fill.makerUserId,
+        buyerUserId,
+        sellerUserId,
+      });
+
+      console.log("🔥 PUBLISH BUYER:", `user_trades@${buyerUserId}`);
+
+      console.log("🔥 PUBLISH SELLER:", `user_trades@${sellerUserId}`);
       // Buyer-specific event
       RedisManager.getInstance().publishMessage(`user_trades@${buyerUserId}`, {
         stream: `user_trades@${buyerUserId}`,
@@ -424,7 +464,6 @@ export class Engine {
     quoteAsset: string,
     side: "buy" | "sell",
     userId: string,
-    asset: string,
     price: string,
     quantity: string,
   ) {
@@ -448,38 +487,58 @@ export class Engine {
   }
 
   updateBalance(
-    userId: string,
+    takerUserId: string,
     baseAsset: string,
     quoteAsset: string,
     side: "buy" | "sell",
     fills: Fill[],
-    executedQty: number,
+    orderPrice: number,
   ) {
-    const affectedUsers = new Set<string>([userId]);
+    const affectedUsers = new Set<string>([takerUserId]);
 
     if (side === "buy") {
       fills.forEach((fill) => {
-        const other = this.balances.get(fill.otherUserId)!;
-        const mine = this.balances.get(userId)!;
-        const value = fill.qty * Number(fill.price);
+        const makerBalance = this.balances.get(fill.makerUserId)!;
 
-        other[quoteAsset].available += value;
-        mine[quoteAsset].locked -= value;
-        other[baseAsset].locked -= fill.qty;
-        mine[baseAsset].available += fill.qty;
-        affectedUsers.add(fill.otherUserId);
+        const takerBalance = this.balances.get(takerUserId)!;
+        const executionPrice = Number(fill.price);
+
+        const actualValue = fill.quantity * executionPrice;
+
+        const reservedValue = fill.quantity * orderPrice;
+
+        const refund = reservedValue - actualValue;
+
+        // Seller receives actual trade value
+        makerBalance[quoteAsset].available += actualValue;
+
+        // Buyer's reserved money for this filled quantity is released
+        takerBalance[quoteAsset].locked -= reservedValue;
+
+        // Price improvement comes back
+        takerBalance[quoteAsset].available += refund;
+
+        // Seller gives asset
+        makerBalance[baseAsset].locked -= fill.quantity;
+
+        // Buyer receives asset
+        takerBalance[baseAsset].available += fill.quantity;
+
+        affectedUsers.add(fill.makerUserId);
       });
     } else {
       fills.forEach((fill) => {
-        const other = this.balances.get(fill.otherUserId)!;
-        const mine = this.balances.get(userId)!;
-        const value = fill.qty * Number(fill.price);
+        const makerBalance = this.balances.get(fill.makerUserId)!;
 
-        other[quoteAsset].locked -= value;
-        mine[quoteAsset].available += value;
-        other[baseAsset].available += fill.qty;
-        mine[baseAsset].locked -= fill.qty;
-        affectedUsers.add(fill.otherUserId);
+        const takerBalance = this.balances.get(takerUserId)!;
+
+        const tradeValue = fill.quantity * Number(fill.price);
+
+        makerBalance[quoteAsset].locked -= tradeValue;
+        takerBalance[quoteAsset].available += tradeValue;
+        makerBalance[baseAsset].available += fill.quantity;
+        takerBalance[baseAsset].locked -= fill.quantity;
+        affectedUsers.add(fill.makerUserId);
       });
     }
 
@@ -518,7 +577,7 @@ export class Engine {
 
   updateDbOrders(
     order: Order,
-    executedQty: number,
+    executedQuantity: number,
     fills: Fill[],
     market: string,
   ) {
@@ -527,7 +586,7 @@ export class Engine {
       data: {
         orderId: order.orderId,
         userId: order.userId,
-        executedQty,
+        executedQuantity,
         market,
         price: order.price.toString(),
         quantity: order.quantity.toString(),
@@ -537,7 +596,7 @@ export class Engine {
     fills.forEach((fill) => {
       RedisManager.getInstance().pushMessage({
         type: ORDER_UPDATE,
-        data: { orderId: fill.markerOrderId, executedQty: fill.qty },
+        data: { orderId: fill.makerOrderId, executedQuantity: fill.quantity },
       });
     });
   }
@@ -546,21 +605,21 @@ export class Engine {
     side: "buy" | "sell",
     fills: Fill[],
     market: string,
-    userId: string,
+    takerUserId: string,
   ) {
     fills.forEach((fill) => {
-      const buyerUserId = side === "buy" ? userId : fill.otherUserId;
+      const buyerUserId = side === "buy" ? takerUserId : fill.makerUserId;
 
-      const sellerUserId = side === "sell" ? userId : fill.otherUserId;
+      const sellerUserId = side === "sell" ? takerUserId : fill.makerUserId;
       RedisManager.getInstance().pushMessage({
         type: TRADE_ADDED,
         data: {
           market,
           id: fill.tradeId.toString(),
-          isBuyerMaker: fill.otherUserId === userId,
+          isBuyerMaker: side === "sell",
           price: fill.price,
-          quantity: fill.qty.toString(),
-          quoteQuantity: (fill.qty * Number(fill.price)).toString(),
+          quantity: fill.quantity.toString(),
+          quoteQuantity: (fill.quantity * Number(fill.price)).toString(),
           timestamp: Date.now(),
           buyerUserId,
           sellerUserId,
@@ -569,16 +628,16 @@ export class Engine {
     });
   }
 
-  publishWsTrades(fills: Fill[], userId: string, market: string) {
+  publishWsTrades(side: "buy" | "sell", fills: Fill[], market: string) {
     fills.forEach((fill) => {
       RedisManager.getInstance().publishMessage(`trade@${market}`, {
         stream: `trade@${market}`,
         data: {
           e: "trade",
           t: fill.tradeId,
-          m: fill.otherUserId === userId,
+          m: side === "sell",
           p: fill.price,
-          q: fill.qty.toString(),
+          q: fill.quantity.toString(),
           s: market,
         },
       });

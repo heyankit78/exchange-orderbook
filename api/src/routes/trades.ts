@@ -47,7 +47,7 @@ tradesRouter.get("/", async (req: AuthRequest, res) => {
 });
 
 tradesRouter.get("/my-trades", authenticate, async (req: AuthRequest, res) => {
-  const userId = req.user!.userId;
+  const userId = Number(req.user!.userId);
   if (!userId) {
     return res.status(401).json({
       message: "Unauthorized",
