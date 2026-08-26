@@ -190,7 +190,7 @@ export class Engine {
 
       case CANCEL_ORDER:
         try {
-          const { orderId, market: cancelMarket } = message.data;
+          const { orderId, market: cancelMarket, userId } = message.data;
           const [baseAsset, quoteAsset] = cancelMarket.split("_");
           const cancelOrderbook = this.orderbooks.find(
             (o) => o.ticker() === cancelMarket,
@@ -201,6 +201,9 @@ export class Engine {
             cancelOrderbook.asks.find((o) => o.orderId === orderId) ||
             cancelOrderbook.bids.find((o) => o.orderId === orderId);
           if (!order) throw new Error("No order found");
+          if (order.userId !== userId) {
+            throw new Error("You cannot cancel another user's order");
+          }
 
           const bal = this.balances.get(order.userId)!;
 
