@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@repo/shared": "*",
     "@types/redis": "^4.0.11",
     "@types/ws": "^8.5.10",
     "redis": "^4.6.14",

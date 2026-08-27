@@ -1,8 +1,11 @@
 import { DEPTH_UPDATE, TICKER_UPDATE } from "./trade/events";
 import { RedisClientType, createClient } from "redis";
-import { ORDER_UPDATE, TRADE_ADDED } from "./types";
-import { WsMessage } from "./types/toWs";
-import { MessageToApi } from "./types/toApi";
+import {
+  ORDER_UPDATE,
+  TRADE_ADDED,
+  WsMessage,
+  MessageToApi,
+} from "@repo/shared";
 
 type DbMessage =
   | {

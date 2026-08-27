@@ -1,7 +1,7 @@
 import fs from "fs";
 import { Client } from "pg";
 import { RedisManager } from "../RedisManager";
-import { ORDER_UPDATE, TRADE_ADDED } from "../types/index";
+import { ORDER_UPDATE, TRADE_ADDED } from "@repo/shared";
 import {
   CANCEL_ORDER,
   CREATE_ORDER,
@@ -10,8 +10,9 @@ import {
   GET_OPEN_ORDERS,
   MessageFromApi,
   ON_RAMP,
-} from "../types/fromApi";
-import { Fill, Order, Orderbook } from "./Orderbook";
+} from "@repo/shared";
+import { Fill, Order } from "@repo/shared";
+import { Orderbook } from "./Orderbook";
 
 export const BASE_CURRENCY = "INR";
 

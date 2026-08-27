@@ -1,6 +1,6 @@
 import { Client } from "pg";
 import { createClient } from "redis";
-import { DbMessage } from "./types";
+import { DbMessage } from "@repo/shared";
 
 const pgClient = new Client({
   user: "your_user",
@@ -74,89 +74,116 @@ async function main() {
     }
 
     if (data.type === "ORDER_UPDATE") {
-      const {
-        orderId,
-        userId,
-        market,
-        price,
-        quantity,
-        side,
-        executedQuantity,
-        cancelled,
-      } = data.data;
+      const orderData = data.data;
 
-      try {
-        if (cancelled) {
-          await pgClient.query(
-            `
-            UPDATE orders
-            SET
-              order_status = 'CANCELLED',
-              updated_at = NOW()
-            WHERE order_id = $1
-            `,
-            [orderId],
-          );
+      // 1. Cancellation update
+      if ("cancelled" in orderData && orderData.cancelled) {
+        await pgClient.query(
+          `
+      UPDATE orders
+      SET order_status = 'CANCELLED',
+          updated_at = NOW()
+      WHERE order_id = $1
+      `,
+          [orderData.orderId],
+        );
 
-          console.log("Order cancelled in DB:", orderId);
+        continue;
+      }
 
+      // 2. New/incoming order
+      if ("userId" in orderData) {
+        const {
+          orderId,
+          userId,
+          market,
+          price,
+          quantity,
+          side,
+          executedQuantity,
+        } = orderData;
+
+        const qty = Number(quantity);
+        const filled = Number(executedQuantity);
+
+        if (!Number.isFinite(filled)) {
+          console.error("INVALID executedQuantity:", {
+            executedQuantity,
+            data: orderData,
+          });
           continue;
         }
-        // Has userId → this is a new order being inserted
-        if (userId && market && price && quantity && side) {
-          const qty = Number(quantity);
-          const filled = Number(executedQuantity);
 
-          let orderStatus = "OPEN";
-          if (filled > 0 && filled < qty) orderStatus = "PARTIALLY_FILLED";
-          else if (filled >= qty) orderStatus = "FILLED";
+        let status = "OPEN";
 
-          await pgClient.query(
-            `INSERT INTO orders (order_id, user_id, market, side, price, quantity, filled, order_status)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                         ON CONFLICT (order_id) DO NOTHING`,
-            [
-              orderId,
-              Number(userId),
-              market,
-              side,
-              price,
-              quantity,
-              filled,
-              orderStatus,
-            ],
-          );
-          console.log("Order inserted:", orderId, orderStatus);
+        if (filled > 0 && filled < qty) {
+          status = "PARTIALLY_FILLED";
+        } else if (filled >= qty) {
+          status = "FILLED";
         }
-        // No userId → maker order got partially/fully filled, update it
-        else {
-          const result = await pgClient.query(
-            `SELECT quantity, filled FROM orders WHERE order_id = $1`,
-            [orderId],
-          );
 
-          if (result.rows.length === 0) {
-            console.log("Maker order not found:", orderId);
-            continue;
-          }
+        await pgClient.query(
+          `
+      INSERT INTO orders (
+        order_id,
+        user_id,
+        market,
+        side,
+        price,
+        quantity,
+        filled,
+        order_status
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `,
+          [orderId, userId, market, side, price, quantity, filled, status],
+        );
 
-          const totalQty = Number(result.rows[0].quantity);
-          const oldFilled = Number(result.rows[0].filled);
-          const newFilled = oldFilled + Number(executedQuantity);
-          const orderStatus =
-            newFilled >= totalQty ? "FILLED" : "PARTIALLY_FILLED";
-
-          await pgClient.query(
-            `UPDATE orders
-                         SET filled = $1, order_status = $2, updated_at = NOW()
-                         WHERE order_id = $3`,
-            [newFilled, orderStatus, orderId],
-          );
-          console.log("Order updated:", orderId, orderStatus);
-        }
-      } catch (e) {
-        console.error("ORDER_UPDATE error:", e);
+        continue;
       }
+
+      // 3. Existing maker order was filled more
+      const { orderId, executedQuantity } = orderData;
+
+      const result = await pgClient.query(
+        `
+    SELECT quantity, filled
+    FROM orders
+    WHERE order_id = $1
+    `,
+        [orderId],
+      );
+
+      if (result.rows.length === 0) {
+        continue;
+      }
+
+      const totalQuantity = Number(result.rows[0].quantity);
+      const oldFilled = Number(result.rows[0].filled);
+      const additionalFilled = Number(executedQuantity);
+
+      if (!Number.isFinite(additionalFilled)) {
+        console.error("INVALID executedQuantity:", {
+          executedQuantity,
+          data: orderData,
+        });
+        continue;
+      }
+
+      const newFilled = oldFilled + additionalFilled;
+
+      const status = newFilled >= totalQuantity ? "FILLED" : "PARTIALLY_FILLED";
+
+      await pgClient.query(
+        `
+    UPDATE orders
+    SET filled = $1,
+        order_status = $2,
+        updated_at = NOW()
+    WHERE order_id = $3
+    `,
+        [newFilled, status, orderId],
+      );
     }
   }
 }

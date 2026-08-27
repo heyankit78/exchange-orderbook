@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@repo/shared": "*",
     "axios": "^1.7.2",
     "lightweight-charts": "^4.1.6",
     "next": "^14.2.35",

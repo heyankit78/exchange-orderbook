@@ -7,7 +7,7 @@ import {
   GET_DEPTH,
   GET_OPEN_ORDERS,
   ON_RAMP,
-} from "../types/fromApi";
+} from "@repo/shared";
 
 const sendToApiMock = vi.fn();
 const publishMessageMock = vi.fn();
@@ -1791,6 +1791,7 @@ describe("Engine", () => {
         data: {
           userId: "99",
           amount: "5000",
+          txnId: "txn-test-1",
         },
       },
       clientId: "client-99",

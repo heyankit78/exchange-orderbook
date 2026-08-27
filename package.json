@@ -1,0 +1,26 @@
+{
+  "name": "exchange-orderbook",
+  "private": true,
+  "workspaces": [
+    "api",
+    "engine",
+    "db",
+    "ws",
+    "mm",
+    "frontend",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w api",
+    "dev:engine": "npm run dev -w engine",
+    "dev:db": "npm run dev -w db",
+    "dev:ws": "npm run dev -w ws",
+    "dev:frontend": "npm run dev -w frontend",
+    "test:engine": "npm run test -w engine",
+    "build:shared": "npm run build -w @repo/shared",
+    "build:engine": "npm run build -w engine",
+    "build:api": "npm run build -w api",
+    "build:db": "npm run build -w db",
+    "build:ws": "npm run build -w ws"
+  }
+}

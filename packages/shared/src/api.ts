@@ -1,10 +1,4 @@
-import { Order } from "../trade/Orderbook";
-
-export const CREATE_ORDER = "CREATE_ORDER";
-export const CANCEL_ORDER = "CANCEL_ORDER";
-export const ON_RAMP = "ON_RAMP";
-
-export const GET_DEPTH = "GET_DEPTH";
+import type { Fill, Order, UserBalance } from "./common";
 
 export type MessageToApi =
   | {
@@ -19,11 +13,7 @@ export type MessageToApi =
       payload: {
         orderId: string;
         executedQuantity: number;
-        fills: {
-          price: string;
-          quantity: number;
-          tradeId: string;
-        }[];
+        fills: Fill[];
       };
     }
   | {
@@ -37,12 +27,7 @@ export type MessageToApi =
     }
   | {
       type: "BALANCE";
-      payload: {
-        [asset: string]: {
-          available: number;
-          locked: number;
-        };
-      };
+      payload: UserBalance;
     }
   | {
       type: "OPEN_ORDERS";

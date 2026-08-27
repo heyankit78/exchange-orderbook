@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@repo/shared": "*",
     "axios": "^1.7.2"
   }
 }

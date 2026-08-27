@@ -3,13 +3,14 @@ import { RedisManager } from "../RedisManager";
 import {
   CREATE_ORDER,
   CANCEL_ORDER,
-  ON_RAMP,
   GET_OPEN_ORDERS,
-} from "../types/index";
+  type MessageToApi,
+} from "@repo/shared";
 import { AuthRequest } from "../middleware/auth";
 import { Client } from "pg";
 
 export const orderRouter = Router();
+
 const pgClient = new Client({
   user: "your_user",
   host: "localhost",
@@ -17,15 +18,15 @@ const pgClient = new Client({
   password: "your_password",
   port: 5432,
 });
+
 pgClient.connect();
 
 orderRouter.post("/", async (req: AuthRequest, res) => {
   const { market, price, quantity, side } = req.body;
-  const userId = req.user!.userId; // comes from JWT, not from frontend
 
-  console.log({ market, price, quantity, side, userId });
+  const userId = req.user!.userId;
 
-  const response = await RedisManager.getInstance().sendAndAwait({
+  const response = (await RedisManager.getInstance().sendAndAwait({
     type: CREATE_ORDER,
     data: {
       market,
@@ -34,37 +35,71 @@ orderRouter.post("/", async (req: AuthRequest, res) => {
       side,
       userId,
     },
-  });
-  if (response.payload?.error) {
+  })) as MessageToApi;
+
+  if (response.type === "ORDER_CANCELLED") {
+    return res.status(400).json({
+      message: response.payload.error ?? "Order rejected",
+    });
+  }
+
+  if (response.type !== "ORDER_PLACED") {
+    return res.status(500).json({
+      message: "Unexpected response from engine",
+    });
+  }
+
+  return res.json(response.payload);
+});
+
+orderRouter.delete("/", async (req: AuthRequest, res) => {
+  const { orderId, market } = req.body;
+
+  const userId = req.user!.userId;
+
+  const response = (await RedisManager.getInstance().sendAndAwait({
+    type: CANCEL_ORDER,
+    data: {
+      orderId,
+      market,
+
+      // IMPORTANT:
+      // trusted userId comes from JWT
+      userId,
+    },
+  })) as MessageToApi;
+
+  if (response.type !== "ORDER_CANCELLED") {
+    return res.status(500).json({
+      message: "Unexpected response from engine",
+    });
+  }
+
+  if (response.payload.error) {
     return res.status(400).json({
       message: response.payload.error,
     });
   }
 
-  res.json(response.payload);
-});
-
-orderRouter.delete("/", async (req: AuthRequest, res) => {
-  const { orderId, market } = req.body;
-  const response = await RedisManager.getInstance().sendAndAwait({
-    type: CANCEL_ORDER,
-    data: {
-      orderId,
-      market,
-    },
-  });
-  res.json(response.payload);
+  return res.json(response.payload);
 });
 
 orderRouter.get("/open", async (req: AuthRequest, res) => {
-  const response = await RedisManager.getInstance().sendAndAwait({
+  const response = (await RedisManager.getInstance().sendAndAwait({
     type: GET_OPEN_ORDERS,
     data: {
       userId: req.user!.userId,
       market: req.query.market as string,
     },
-  });
-  res.json(response.payload);
+  })) as MessageToApi;
+
+  if (response.type !== "OPEN_ORDERS") {
+    return res.status(500).json({
+      message: "Unexpected response from engine",
+    });
+  }
+
+  return res.json(response.payload);
 });
 
 orderRouter.get("/history", async (req: AuthRequest, res) => {
@@ -87,7 +122,7 @@ orderRouter.get("/history", async (req: AuthRequest, res) => {
       WHERE user_id = $1
     `;
 
-    const values: any[] = [Number(userId)];
+    const values: unknown[] = [Number(userId)];
 
     if (market) {
       query += ` AND market = $2`;
@@ -108,7 +143,9 @@ orderRouter.get("/history", async (req: AuthRequest, res) => {
       price: String(row.price),
       quantity: String(row.quantity),
       filled: String(row.filled),
+
       remaining: String(Number(row.quantity) - Number(row.filled)),
+
       status: row.order_status,
       createdAt: row.created_at,
       updatedAt: row.updated_at,

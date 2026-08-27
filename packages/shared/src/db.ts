@@ -1,7 +1,10 @@
-import type { Side } from "./engine";
+import type { Side } from "./common";
+
+export const ORDER_UPDATE = "ORDER_UPDATE";
+export const TRADE_ADDED = "TRADE_ADDED";
 
 export type OrderUpdateMessage = {
-  type: "ORDER_UPDATE";
+  type: typeof ORDER_UPDATE;
   data:
     | {
         orderId: string;
@@ -20,7 +23,7 @@ export type OrderUpdateMessage = {
 };
 
 export type TradeAddedMessage = {
-  type: "TRADE_ADDED";
+  type: typeof TRADE_ADDED;
   data: {
     id: string;
     market: string;
