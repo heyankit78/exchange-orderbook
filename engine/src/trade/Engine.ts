@@ -152,7 +152,7 @@ export class Engine {
 
   // ─── Message processor ─────────────────────────────────────────
 
-  process({
+  async process({
     message,
     clientId,
   }: {
@@ -262,7 +262,7 @@ export class Engine {
 
       case ON_RAMP:
         // Use void to fire-and-forget but still log errors
-        void this.onRamp(message.data.userId, Number(message.data.amount));
+        await this.onRamp(message.data.userId, Number(message.data.amount));
         break;
 
       case GET_DEPTH:
