@@ -9,6 +9,21 @@ async function main() {
 
   console.log("connected to redis");
 
+  // 1. Ensure stream + group exist
+  try {
+    await redisClient.xGroupCreate("messages", "engine-group", "0", {
+      MKSTREAM: true,
+    });
+
+    console.log("engine-group created");
+  } catch (error: any) {
+    if (!String(error?.message).includes("BUSYGROUP")) {
+      throw error;
+    }
+
+    console.log("engine-group already exists");
+  }
+
   await engine.init();
 
   // -----------------------------
@@ -51,7 +66,12 @@ async function main() {
 
       await redisClient.xAck("messages", "engine-group", streamId);
 
-      console.log("RECOVERED + ACKED:", streamId);
+      console.log("RECOVERED + ACKED:", {
+        streamId,
+        type: parsedMessage.message.type,
+        userId: parsedMessage.message.data?.userId,
+        orderId: parsedMessage.message.data?.orderId,
+      });
     } catch (error) {
       console.error("RECOVERY FAILED:", error);
       break;
@@ -96,12 +116,18 @@ async function main() {
 
     try {
       const parsedMessage = JSON.parse(rawMessage);
+      // process.exit(1)
 
       await engine.process(parsedMessage);
 
       await redisClient.xAck("messages", "engine-group", streamId);
 
-      console.log("ACKED:", streamId);
+      console.log("ACKED:", {
+        streamId,
+        type: parsedMessage.message.type,
+        userId: parsedMessage.message.data?.userId,
+        orderId: parsedMessage.message.data?.orderId,
+      });
     } catch (error) {
       console.error("PROCESSING FAILED:", error);
 
