@@ -62,7 +62,7 @@ async function main() {
     try {
       const parsedMessage = JSON.parse(rawMessage);
 
-      await engine.process(parsedMessage);
+      await engine.process(parsedMessage, streamId);
 
       await redisClient.xAck("messages", "engine-group", streamId);
 
@@ -118,16 +118,25 @@ async function main() {
       const parsedMessage = JSON.parse(rawMessage);
       // process.exit(1)
 
-      await engine.process(parsedMessage);
+      await engine.process(parsedMessage, streamId);
+      console.log("parsedMessage--", parsedMessage);
 
-      await redisClient.xAck("messages", "engine-group", streamId);
-
-      console.log("ACKED:", {
+      console.log("SIMULATED CRASH AFTER PROCESS, BEFORE ACK:", {
         streamId,
         type: parsedMessage.message.type,
         userId: parsedMessage.message.data?.userId,
-        orderId: parsedMessage.message.data?.orderId,
       });
+
+      process.exit(1);
+
+      // await redisClient.xAck("messages", "engine-group", streamId);
+
+      // console.log("ACKED:", {
+      //   streamId,
+      //   type: parsedMessage.message.type,
+      //   userId: parsedMessage.message.data?.userId,
+      //   orderId: parsedMessage.message.data?.orderId,
+      // });
     } catch (error) {
       console.error("PROCESSING FAILED:", error);
 

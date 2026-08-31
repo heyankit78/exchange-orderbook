@@ -35,7 +35,7 @@ async function initializeDB() {
 
   await client.query(`
         CREATE TABLE IF NOT EXISTS orders (
-            order_id VARCHAR(50) PRIMARY KEY,
+            order_id VARCHAR(120) PRIMARY KEY,
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             market VARCHAR(20) NOT NULL,
             side VARCHAR(10) NOT NULL,
@@ -51,7 +51,7 @@ async function initializeDB() {
 
   await client.query(`
   CREATE TABLE IF NOT EXISTS trades (
-    trade_id VARCHAR(50) PRIMARY KEY,
+    trade_id VARCHAR(120) PRIMARY KEY,
 
     market VARCHAR(30) NOT NULL,
 

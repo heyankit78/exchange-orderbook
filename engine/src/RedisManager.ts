@@ -53,8 +53,8 @@ export class RedisManager {
     return this.instance;
   }
 
-  public pushMessage(message: DbMessage) {
-    this.client.lPush("db_processor", JSON.stringify(message));
+  public async pushMessage(message: DbMessage) {
+    await this.client.lPush("db_processor", JSON.stringify(message));
   }
 
   public publishMessage(channel: string, message: WsMessage) {

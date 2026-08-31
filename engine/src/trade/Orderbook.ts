@@ -65,7 +65,10 @@ export class Orderbook {
   }
 
   //TODO: Add self trade prevention
-  addOrder(order: Order): {
+  addOrder(
+    order: Order,
+    commandId?: string,
+  ): {
     executedQuantity: number;
     fills: Fill[];
   } {
@@ -100,10 +103,14 @@ export class Orderbook {
     }
   }
 
-  matchBid(order: Order): { fills: Fill[]; executedQuantity: number } {
+  matchBid(
+    order: Order,
+    commandId?: string,
+  ): { fills: Fill[]; executedQuantity: number } {
     const fills: Fill[] = [];
     let executedQuantity = 0;
 
+    const fillIndex = fills.length;
     this.asks.sort((a, b) => a.price - b.price);
     for (let i = 0; i < this.asks.length; i++) {
       if (this.asks[i].userId === order.userId) {
@@ -126,7 +133,7 @@ export class Orderbook {
         fills.push({
           price: this.asks[i].price.toString(),
           quantity: filledQuantity,
-          tradeId: randomUUID(),
+          tradeId: commandId ? `trade-${commandId}-${fillIndex}` : randomUUID(),
           makerUserId: this.asks[i].userId,
           makerOrderId: this.asks[i].orderId,
 
@@ -147,9 +154,13 @@ export class Orderbook {
     };
   }
 
-  matchAsk(order: Order): { fills: Fill[]; executedQuantity: number } {
+  matchAsk(
+    order: Order,
+    commandId?: string,
+  ): { fills: Fill[]; executedQuantity: number } {
     const fills: Fill[] = [];
     let executedQuantity = 0;
+    const fillIndex = fills.length;
     this.bids.sort((a, b) => b.price - a.price);
     for (let i = 0; i < this.bids.length; i++) {
       if (this.bids[i].userId === order.userId) {
@@ -172,7 +183,7 @@ export class Orderbook {
         fills.push({
           price: this.bids[i].price.toString(),
           quantity: filledQuantity,
-          tradeId: randomUUID(),
+          tradeId: commandId ? `trade-${commandId}-${fillIndex}` : randomUUID(),
           makerUserId: this.bids[i].userId,
           makerOrderId: this.bids[i].orderId,
 

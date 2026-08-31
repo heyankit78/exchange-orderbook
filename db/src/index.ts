@@ -135,6 +135,7 @@ async function main() {
         order_status
       )
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      ON CONFLICT (order_id) DO NOTHING
       `,
           [orderId, userId, market, side, price, quantity, filled, status],
         );

@@ -152,22 +152,26 @@ export class Engine {
 
   // ─── Message processor ─────────────────────────────────────────
 
-  async process({
-    message,
-    clientId,
-  }: {
-    message: MessageFromApi;
-    clientId: string;
-  }) {
+  async process(
+    {
+      message,
+      clientId,
+    }: {
+      message: MessageFromApi;
+      clientId: string;
+    },
+    streamId?: string,
+  ) {
     switch (message.type) {
       case CREATE_ORDER:
         try {
-          const { executedQuantity, fills, orderId } = this.createOrder(
+          const { executedQuantity, fills, orderId } = await this.createOrder(
             message.data.market,
             message.data.price,
             message.data.quantity,
             message.data.side,
             message.data.userId,
+            streamId,
           );
           RedisManager.getInstance().sendToApi(clientId, {
             type: "ORDER_PLACED",
@@ -339,18 +343,40 @@ export class Engine {
 
   // ─── Order logic ───────────────────────────────────────────────
 
-  createOrder(
+  async createOrder(
     market: string,
     price: string,
     quantity: string,
     side: "buy" | "sell",
     takerUserId: string,
+    streamId?: string,
   ) {
     const orderbook = this.orderbooks.find((o) => o.ticker() === market);
     const baseAsset = market.split("_")[0];
     const quoteAsset = market.split("_")[1];
     if (!orderbook) throw new Error("No orderbook found");
 
+    const orderId = streamId
+      ? `order-${streamId}`
+      : Math.random().toString(36).substring(2, 15) +
+        Math.random().toString(36).substring(2, 15);
+
+    // Idempotency check
+    const existingOrder =
+      orderbook.bids.find((order) => order.orderId === orderId) ||
+      orderbook.asks.find((order) => order.orderId === orderId);
+
+    if (existingOrder) {
+      throw new Error(`Order ${orderId} already processed`);
+    }
+    const existingInDb = await this.pgClient.query(
+      `SELECT order_id FROM orders WHERE order_id = $1`,
+      [orderId],
+    );
+
+    if (existingInDb.rows.length > 0) {
+      throw new Error("Order already processed");
+    }
     this.checkAndLockFunds(
       baseAsset,
       quoteAsset,
@@ -363,15 +389,13 @@ export class Engine {
     const order: Order = {
       price: Number(price),
       quantity: Number(quantity),
-      orderId:
-        Math.random().toString(36).substring(2, 15) +
-        Math.random().toString(36).substring(2, 15),
+      orderId: orderId,
       filled: 0,
       side,
       userId: takerUserId,
     };
 
-    const { fills, executedQuantity } = orderbook.addOrder(order);
+    const { fills, executedQuantity } = orderbook.addOrder(order, streamId);
 
     this.updateBalance(
       takerUserId,
@@ -382,15 +406,15 @@ export class Engine {
       Number(price),
     );
 
-    this.createDbTrades(side, fills, market, takerUserId);
-    this.updateDbOrders(order, executedQuantity, fills, market);
-    this.publisWsDepthUpdates(fills, price, side, market);
-    this.publishUserOrderUpdates(fills);
-    this.publishWsTrades(side, fills, market);
-    this.publishUserTradeUpdates(side, fills, market, takerUserId);
+    await this.createDbTrades(side, fills, market, takerUserId);
+    await this.updateDbOrders(order, executedQuantity, fills, market);
+    await this.publisWsDepthUpdates(fills, price, side, market);
+    await this.publishUserOrderUpdates(fills);
+    await this.publishWsTrades(side, fills, market);
+    await this.publishUserTradeUpdates(side, fills, market, takerUserId);
     return { executedQuantity, fills, orderId: order.orderId };
   }
-  publishUserOrderUpdates(fills: Fill[]) {
+  async publishUserOrderUpdates(fills: Fill[]) {
     fills.forEach((fill) => {
       const status =
         fill.makerFilledQuantity >= fill.makerOrderQuantity
@@ -411,7 +435,7 @@ export class Engine {
       );
     });
   }
-  publishUserTradeUpdates(
+  async publishUserTradeUpdates(
     side: "buy" | "sell",
     fills: Fill[],
     market: string,
@@ -490,7 +514,7 @@ export class Engine {
     }
   }
 
-  updateBalance(
+  async updateBalance(
     takerUserId: string,
     baseAsset: string,
     quoteAsset: string,
@@ -579,13 +603,13 @@ export class Engine {
     this.orderbooks.push(orderbook);
   }
 
-  updateDbOrders(
+  async updateDbOrders(
     order: Order,
     executedQuantity: number,
     fills: Fill[],
     market: string,
   ) {
-    RedisManager.getInstance().pushMessage({
+    await RedisManager.getInstance().pushMessage({
       type: ORDER_UPDATE,
       data: {
         orderId: order.orderId,
@@ -597,25 +621,29 @@ export class Engine {
         side: order.side,
       },
     });
-    fills.forEach((fill) => {
-      RedisManager.getInstance().pushMessage({
+    for (const fill of fills) {
+      await RedisManager.getInstance().pushMessage({
         type: ORDER_UPDATE,
-        data: { orderId: fill.makerOrderId, executedQuantity: fill.quantity },
+        data: {
+          orderId: fill.makerOrderId,
+          executedQuantity: fill.quantity,
+        },
       });
-    });
+    }
   }
 
-  createDbTrades(
+  async createDbTrades(
     side: "buy" | "sell",
     fills: Fill[],
     market: string,
     takerUserId: string,
   ) {
-    fills.forEach((fill) => {
+    for (const fill of fills) {
       const buyerUserId = side === "buy" ? takerUserId : fill.makerUserId;
 
       const sellerUserId = side === "sell" ? takerUserId : fill.makerUserId;
-      RedisManager.getInstance().pushMessage({
+
+      await RedisManager.getInstance().pushMessage({
         type: TRADE_ADDED,
         data: {
           market,
@@ -629,10 +657,10 @@ export class Engine {
           sellerUserId,
         },
       });
-    });
+    }
   }
 
-  publishWsTrades(side: "buy" | "sell", fills: Fill[], market: string) {
+  async publishWsTrades(side: "buy" | "sell", fills: Fill[], market: string) {
     fills.forEach((fill) => {
       RedisManager.getInstance().publishMessage(`trade@${market}`, {
         stream: `trade@${market}`,
@@ -664,7 +692,7 @@ export class Engine {
     });
   }
 
-  publisWsDepthUpdates(
+  async publisWsDepthUpdates(
     fills: Fill[],
     price: string,
     side: "buy" | "sell",
