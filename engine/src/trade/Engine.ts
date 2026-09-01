@@ -397,6 +397,15 @@ export class Engine {
 
     const { fills, executedQuantity } = orderbook.addOrder(order, streamId);
 
+    console.log(
+      "FILLS:",
+      fills.map((fill) => ({
+        tradeId: fill.tradeId,
+        makerOrderId: fill.makerOrderId,
+        quantity: fill.quantity,
+      })),
+    );
+
     this.updateBalance(
       takerUserId,
       baseAsset,

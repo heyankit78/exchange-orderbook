@@ -127,16 +127,16 @@ async function main() {
         userId: parsedMessage.message.data?.userId,
       });
 
-      process.exit(1);
+      // process.exit(1);
 
-      // await redisClient.xAck("messages", "engine-group", streamId);
+      await redisClient.xAck("messages", "engine-group", streamId);
 
-      // console.log("ACKED:", {
-      //   streamId,
-      //   type: parsedMessage.message.type,
-      //   userId: parsedMessage.message.data?.userId,
-      //   orderId: parsedMessage.message.data?.orderId,
-      // });
+      console.log("ACKED:", {
+        streamId,
+        type: parsedMessage.message.type,
+        userId: parsedMessage.message.data?.userId,
+        orderId: parsedMessage.message.data?.orderId,
+      });
     } catch (error) {
       console.error("PROCESSING FAILED:", error);
 

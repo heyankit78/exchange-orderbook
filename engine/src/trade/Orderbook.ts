@@ -73,7 +73,7 @@ export class Orderbook {
     fills: Fill[];
   } {
     if (order.side === "buy") {
-      const { executedQuantity, fills } = this.matchBid(order);
+      const { executedQuantity, fills } = this.matchBid(order, commandId);
       order.filled = executedQuantity;
       if (executedQuantity === order.quantity) {
         return {
@@ -87,7 +87,7 @@ export class Orderbook {
         fills,
       };
     } else {
-      const { executedQuantity, fills } = this.matchAsk(order);
+      const { executedQuantity, fills } = this.matchAsk(order, commandId);
       order.filled = executedQuantity;
       if (executedQuantity === order.quantity) {
         return {
