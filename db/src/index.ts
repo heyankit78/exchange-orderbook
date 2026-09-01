@@ -24,32 +24,22 @@ async function main() {
 
     if (data.type === "TRADE_ADDED") {
       try {
-        await pgClient.query(
-          `INSERT INTO market_prices (time, price, volume, market)
-                     VALUES ($1, $2, $3, $4)`,
-          [
-            new Date(data.data.timestamp),
-            data.data.price,
-            data.data.quoteQuantity,
-            data.data.market,
-          ],
-        );
-
-        await pgClient.query(
+        const tradeResult = await pgClient.query(
           `
-          INSERT INTO trades (
-            trade_id,
-            market,
-            price,
-            quantity,
-            quote_quantity,
-            buyer_user_id,
-            seller_user_id,
-            created_at
-          )
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-          ON CONFLICT (trade_id) DO NOTHING
-          `,
+      INSERT INTO trades (
+        trade_id,
+        market,
+        price,
+        quantity,
+        quote_quantity,
+        buyer_user_id,
+        seller_user_id,
+        created_at
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      ON CONFLICT (trade_id) DO NOTHING
+      RETURNING trade_id
+      `,
           [
             data.data.id,
             data.data.market,
@@ -59,6 +49,31 @@ async function main() {
             Number(data.data.buyerUserId),
             Number(data.data.sellerUserId),
             new Date(data.data.timestamp),
+          ],
+        );
+
+        // duplicate trade => stop here
+        if (tradeResult.rowCount === 0) {
+          console.log("Duplicate trade ignored:", data.data.id);
+          continue;
+        }
+
+        // only a genuinely new trade reaches here
+        await pgClient.query(
+          `
+      INSERT INTO market_prices (
+        time,
+        price,
+        volume,
+        market
+      )
+      VALUES ($1,$2,$3,$4)
+      `,
+          [
+            new Date(data.data.timestamp),
+            data.data.price,
+            data.data.quantity,
+            data.data.market,
           ],
         );
 
