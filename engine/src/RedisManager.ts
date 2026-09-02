@@ -54,7 +54,17 @@ export class RedisManager {
   }
 
   public async pushMessage(message: DbMessage) {
-    await this.client.lPush("db_processor", JSON.stringify(message));
+    // await this.client.lPush("db_processor", JSON.stringify(message));
+
+    const streamId = await this.client.xAdd("db_stream", "*", {
+      message: JSON.stringify(message),
+    });
+
+    console.log("DB EVENT ADDED:", {
+      streamId,
+      type: message.type,
+    });
+    return streamId;
   }
 
   public publishMessage(channel: string, message: WsMessage) {
