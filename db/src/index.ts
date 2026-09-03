@@ -287,6 +287,7 @@ async function processStreamMessage(
       streamId,
       type: data.type,
     });
+    return true;
   } catch (error) {
     console.error("DB EVENT FAILED:", {
       streamId,
@@ -294,6 +295,7 @@ async function processStreamMessage(
       error,
     });
 
+    return false;
     // No XACK.
     // Message remains pending in Redis.
   }
@@ -345,7 +347,7 @@ async function main() {
   // =========================================================
 
   console.log("Starting DB pending recovery...");
-
+  let retryCount = 0;
   while (true) {
     const response = await redisClient.xReadGroup(
       "db-group",
@@ -376,7 +378,22 @@ async function main() {
 
     console.log("RECOVERING DB EVENT:", streamId);
 
-    await processStreamMessage(redisClient, streamId, rawMessage);
+    // await processStreamMessage(redisClient, streamId, rawMessage);
+    const success = await processStreamMessage(
+      redisClient,
+      streamId,
+      rawMessage,
+    );
+
+    if (success) {
+      retryCount = 0;
+      continue;
+    }
+    retryCount++;
+    if (retryCount >= 3) {
+      console.log("Message failed 3 times. Stopping recovery.");
+      break;
+    }
   }
 
   console.log("DB pending recovery finished");
@@ -416,7 +433,16 @@ async function main() {
 
     console.log("NEW DB EVENT:", streamId);
 
-    await processStreamMessage(redisClient, streamId, rawMessage);
+    // await processStreamMessage(redisClient, streamId, rawMessage);
+    const success = await processStreamMessage(
+      redisClient,
+      streamId,
+      rawMessage,
+    );
+
+    if (!success) {
+      console.log("New DB event failed. Message remains pending:", streamId);
+    }
   }
 }
 
