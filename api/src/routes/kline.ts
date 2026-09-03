@@ -20,19 +20,25 @@ type KlineRow = {
   low: string;
   close: string;
   volume: string;
-  quoteVolume: string;
-  trades: number;
-  start: Date;
+  market: string;
 };
 
 klineRouter.get("/", async (req, res) => {
-  const { market, interval, startTime, endTime } = req.query;
+  const { symbol, interval, startTime, endTime } = req.query;
+
+  if (!symbol) {
+    return res.status(400).json({
+      message: "symbol is required",
+    });
+  }
 
   if (!startTime || !endTime) {
     return res.status(400).json({
       message: "startTime and endTime are required",
     });
   }
+
+  const market = String(symbol);
 
   const start = Number(startTime);
   const end = Number(endTime);
@@ -48,30 +54,54 @@ klineRouter.get("/", async (req, res) => {
   switch (interval) {
     case "1m":
       query = `
-        SELECT *
+        SELECT
+          bucket,
+          open,
+          high,
+          low,
+          close,
+          volume,
+          market
         FROM klines_1m
-        WHERE bucket >= $1
-          AND bucket <= $2
+        WHERE market = $1
+          AND bucket >= $2
+          AND bucket <= $3
         ORDER BY bucket ASC
       `;
       break;
 
     case "1h":
       query = `
-        SELECT *
+        SELECT
+          bucket,
+          open,
+          high,
+          low,
+          close,
+          volume,
+          market
         FROM klines_1h
-        WHERE bucket >= $1
-          AND bucket <= $2
+        WHERE market = $1
+          AND bucket >= $2
+          AND bucket <= $3
         ORDER BY bucket ASC
       `;
       break;
 
     case "1w":
       query = `
-        SELECT *
+        SELECT
+          bucket,
+          open,
+          high,
+          low,
+          close,
+          volume,
+          market
         FROM klines_1w
-        WHERE bucket >= $1
-          AND bucket <= $2
+        WHERE market = $1
+          AND bucket >= $2
+          AND bucket <= $3
         ORDER BY bucket ASC
       `;
       break;
@@ -84,20 +114,19 @@ klineRouter.get("/", async (req, res) => {
 
   try {
     const result = await pgClient.query<KlineRow>(query, [
+      market,
       new Date(start * 1000),
       new Date(end * 1000),
     ]);
 
     return res.json(
       result.rows.map((x) => ({
-        close: x.close,
+        start: x.bucket,
         end: x.bucket,
+        open: x.open,
         high: x.high,
         low: x.low,
-        open: x.open,
-        quoteVolume: x.quoteVolume,
-        start: x.start,
-        trades: x.trades,
+        close: x.close,
         volume: x.volume,
       })),
     );

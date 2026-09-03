@@ -48,8 +48,7 @@ async function processDbMessage(data: DbMessage) {
       // Duplicate trade is still considered successfully processed.
       // This prevents duplicate market_prices rows on retry.
       if (tradeResult.rowCount === 0) {
-        await pgClient.query("ROLLBACK");
-
+        await pgClient.query("COMMIT");
         console.log("Duplicate trade ignored:", data.data.id);
         return;
       }
@@ -198,11 +197,7 @@ async function processDbMessage(data: DbMessage) {
     );
 
     if (result.rows.length === 0) {
-      console.log("Maker order not found:", orderId);
-
-      // For now we treat it as handled.
-      // Later we can change this to throw if we want retry behavior.
-      return;
+      throw new Error(`Maker order not found: ${orderId}`);
     }
 
     const totalQuantity = Number(result.rows[0].quantity);
