@@ -15,8 +15,10 @@ async function processDbMessage(data: DbMessage) {
   // 1. TRADE ADDED
   // =========================================================
   if (data.type === "TRADE_ADDED") {
-    const tradeResult = await pgClient.query(
-      `
+    try {
+      await pgClient.query("BEGIN");
+      const tradeResult = await pgClient.query(
+        `
       INSERT INTO trades (
         trade_id,
         market,
@@ -31,27 +33,29 @@ async function processDbMessage(data: DbMessage) {
       ON CONFLICT (trade_id) DO NOTHING
       RETURNING trade_id
       `,
-      [
-        data.data.id,
-        data.data.market,
-        data.data.price,
-        data.data.quantity,
-        data.data.quoteQuantity,
-        Number(data.data.buyerUserId),
-        Number(data.data.sellerUserId),
-        new Date(data.data.timestamp),
-      ],
-    );
+        [
+          data.data.id,
+          data.data.market,
+          data.data.price,
+          data.data.quantity,
+          data.data.quoteQuantity,
+          Number(data.data.buyerUserId),
+          Number(data.data.sellerUserId),
+          new Date(data.data.timestamp),
+        ],
+      );
 
-    // Duplicate trade is still considered successfully processed.
-    // This prevents duplicate market_prices rows on retry.
-    if (tradeResult.rowCount === 0) {
-      console.log("Duplicate trade ignored:", data.data.id);
-      return;
-    }
+      // Duplicate trade is still considered successfully processed.
+      // This prevents duplicate market_prices rows on retry.
+      if (tradeResult.rowCount === 0) {
+        await pgClient.query("ROLLBACK");
 
-    await pgClient.query(
-      `
+        console.log("Duplicate trade ignored:", data.data.id);
+        return;
+      }
+
+      await pgClient.query(
+        `
       INSERT INTO market_prices (
         time,
         price,
@@ -60,22 +64,27 @@ async function processDbMessage(data: DbMessage) {
       )
       VALUES ($1,$2,$3,$4)
       `,
-      [
-        new Date(data.data.timestamp),
-        data.data.price,
-        data.data.quantity,
+        [
+          new Date(data.data.timestamp),
+          data.data.price,
+          data.data.quantity,
+          data.data.market,
+        ],
+      );
+
+      console.log(
+        "Trade saved:",
+        data.data.id,
         data.data.market,
-      ],
-    );
+        data.data.price,
+      );
+      await pgClient.query("COMMIT");
 
-    console.log(
-      "Trade saved:",
-      data.data.id,
-      data.data.market,
-      data.data.price,
-    );
-
-    return;
+      return;
+    } catch (error) {
+      await pgClient.query("ROLLBACK");
+      throw error;
+    }
   }
 
   // =========================================================
