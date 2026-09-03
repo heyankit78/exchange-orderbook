@@ -636,6 +636,7 @@ export class Engine {
         data: {
           orderId: fill.makerOrderId,
           executedQuantity: fill.quantity,
+          makerFilledQuantity: fill.makerFilledQuantity,
         },
       });
     }

@@ -11,6 +11,9 @@ const pgClient = new Client({
 });
 
 async function processDbMessage(data: DbMessage) {
+  // =========================================================
+  // 1. TRADE ADDED
+  // =========================================================
   if (data.type === "TRADE_ADDED") {
     const tradeResult = await pgClient.query(
       `
@@ -40,8 +43,8 @@ async function processDbMessage(data: DbMessage) {
       ],
     );
 
-    // Duplicate trade is still a successful/idempotent processing.
-    // We just don't want another market_prices row.
+    // Duplicate trade is still considered successfully processed.
+    // This prevents duplicate market_prices rows on retry.
     if (tradeResult.rowCount === 0) {
       console.log("Duplicate trade ignored:", data.data.id);
       return;
@@ -75,10 +78,15 @@ async function processDbMessage(data: DbMessage) {
     return;
   }
 
+  // =========================================================
+  // 2. ORDER UPDATE
+  // =========================================================
   if (data.type === "ORDER_UPDATE") {
     const orderData = data.data;
 
-    // 1. Cancellation
+    // ---------------------------------------------------------
+    // 2A. ORDER CANCELLATION
+    // ---------------------------------------------------------
     if ("cancelled" in orderData && orderData.cancelled) {
       await pgClient.query(
         `
@@ -95,7 +103,9 @@ async function processDbMessage(data: DbMessage) {
       return;
     }
 
-    // 2. New/incoming order
+    // ---------------------------------------------------------
+    // 2B. NEW / INCOMING ORDER
+    // ---------------------------------------------------------
     if ("userId" in orderData) {
       const {
         orderId,
@@ -109,6 +119,10 @@ async function processDbMessage(data: DbMessage) {
 
       const qty = Number(quantity);
       const filled = Number(executedQuantity);
+
+      if (!Number.isFinite(qty)) {
+        throw new Error(`Invalid quantity for order ${orderId}: ${quantity}`);
+      }
 
       if (!Number.isFinite(filled)) {
         throw new Error(
@@ -144,14 +158,26 @@ async function processDbMessage(data: DbMessage) {
 
       console.log("Order saved:", {
         orderId,
+        filled,
         status,
       });
 
       return;
     }
 
-    // 3. Existing maker order filled more
-    const { orderId, executedQuantity } = orderData;
+    // ---------------------------------------------------------
+    // 2C. EXISTING MAKER ORDER FILLED MORE
+    // ---------------------------------------------------------
+
+    const { orderId, makerFilledQuantity } = orderData;
+
+    const absoluteFilled = Number(makerFilledQuantity);
+
+    if (!Number.isFinite(absoluteFilled)) {
+      throw new Error(
+        `Invalid makerFilledQuantity for ${orderId}: ${makerFilledQuantity}`,
+      );
+    }
 
     const result = await pgClient.query(
       `
@@ -165,47 +191,61 @@ async function processDbMessage(data: DbMessage) {
     if (result.rows.length === 0) {
       console.log("Maker order not found:", orderId);
 
-      // For now treat it as handled.
-      // Later we can decide whether this should instead throw/retry.
+      // For now we treat it as handled.
+      // Later we can change this to throw if we want retry behavior.
       return;
     }
 
     const totalQuantity = Number(result.rows[0].quantity);
-    const oldFilled = Number(result.rows[0].filled);
-    const additionalFilled = Number(executedQuantity);
+    const currentFilled = Number(result.rows[0].filled);
 
-    if (!Number.isFinite(additionalFilled)) {
+    if (!Number.isFinite(totalQuantity)) {
       throw new Error(
-        `Invalid maker executedQuantity for ${orderId}: ${executedQuantity}`,
+        `Invalid total quantity stored for maker order ${orderId}`,
       );
     }
 
-    const newFilled = oldFilled + additionalFilled;
-
-    const status = newFilled >= totalQuantity ? "FILLED" : "PARTIALLY_FILLED";
+    if (!Number.isFinite(currentFilled)) {
+      throw new Error(
+        `Invalid current filled quantity stored for maker order ${orderId}`,
+      );
+    }
 
     await pgClient.query(
       `
       UPDATE orders
-      SET filled = $1,
-          order_status = $2,
-          updated_at = NOW()
-      WHERE order_id = $3
+      SET
+        filled = GREATEST(filled, $1),
+        order_status =
+          CASE
+            WHEN GREATEST(filled, $1) >= quantity
+              THEN 'FILLED'
+            ELSE 'PARTIALLY_FILLED'
+          END,
+        updated_at = NOW()
+      WHERE order_id = $2
       `,
-      [newFilled, status, orderId],
+      [absoluteFilled, orderId],
     );
 
     console.log("Maker order updated:", {
       orderId,
-      oldFilled,
-      additionalFilled,
-      newFilled,
-      status,
+      currentFilled,
+      makerFilledQuantity: absoluteFilled,
+      finalFilled: Math.max(currentFilled, absoluteFilled),
+      status:
+        Math.max(currentFilled, absoluteFilled) >= totalQuantity
+          ? "FILLED"
+          : "PARTIALLY_FILLED",
     });
 
     return;
   }
 }
+
+// =========================================================
+// PROCESS ONE REDIS STREAM MESSAGE
+// =========================================================
 
 async function processStreamMessage(
   redisClient: ReturnType<typeof createClient>,
@@ -222,12 +262,16 @@ async function processStreamMessage(
   try {
     await processDbMessage(data);
 
-    // console.log("SIMULATED DB WORKER CRASH BEFORE XACK:", {
-    //   streamId,
-    //   type: data.type,
-    // });
+    // if (data.type === "ORDER_UPDATE" && "makerFilledQuantity" in data.data) {
+    //   console.log("SIMULATED MAKER UPDATE CRASH BEFORE XACK:", {
+    //     streamId,
+    //     orderId: data.data.orderId,
+    //     makerFilledQuantity: data.data.makerFilledQuantity,
+    //   });
 
-    // process.exit(1);
+    //   process.exit(1);
+    // }
+
     await redisClient.xAck("db_stream", "db-group", streamId);
 
     console.log("DB EVENT ACKED:", {
@@ -241,16 +285,27 @@ async function processStreamMessage(
       error,
     });
 
-    // IMPORTANT:
-    // no XACK
-    // message stays pending
+    // No XACK.
+    // Message remains pending in Redis.
   }
 }
 
+// =========================================================
+// MAIN
+// =========================================================
+
 async function main() {
+  // ---------------------------------------------------------
+  // PostgreSQL
+  // ---------------------------------------------------------
+
   await pgClient.connect();
 
   console.log("DB worker connected to PostgreSQL");
+
+  // ---------------------------------------------------------
+  // Redis
+  // ---------------------------------------------------------
 
   const redisClient = createClient();
 
@@ -258,9 +313,10 @@ async function main() {
 
   console.log("DB worker connected to Redis");
 
-  // ------------------------------------------------
+  // ---------------------------------------------------------
   // Ensure stream + consumer group exist
-  // ------------------------------------------------
+  // ---------------------------------------------------------
+
   try {
     await redisClient.xGroupCreate("db_stream", "db-group", "0", {
       MKSTREAM: true,
@@ -275,9 +331,10 @@ async function main() {
     console.log("db-group already exists");
   }
 
-  // ------------------------------------------------
-  // 1. Recover pending messages for db-worker-1
-  // ------------------------------------------------
+  // =========================================================
+  // 1. RECOVER PENDING MESSAGES
+  // =========================================================
+
   console.log("Starting DB pending recovery...");
 
   while (true) {
@@ -315,9 +372,10 @@ async function main() {
 
   console.log("DB pending recovery finished");
 
-  // ------------------------------------------------
-  // 2. Read new DB events forever
-  // ------------------------------------------------
+  // =========================================================
+  // 2. READ NEW DB EVENTS
+  // =========================================================
+
   while (true) {
     const response = await redisClient.xReadGroup(
       "db-group",

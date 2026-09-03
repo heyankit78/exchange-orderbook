@@ -110,7 +110,6 @@ export class Orderbook {
     const fills: Fill[] = [];
     let executedQuantity = 0;
 
-    const fillIndex = fills.length;
     this.asks.sort((a, b) => a.price - b.price);
     for (let i = 0; i < this.asks.length; i++) {
       if (this.asks[i].userId === order.userId) {
@@ -130,6 +129,7 @@ export class Orderbook {
         executedQuantity += filledQuantity;
         this.asks[i].filled += filledQuantity;
 
+        const fillIndex = fills.length;
         fills.push({
           price: this.asks[i].price.toString(),
           quantity: filledQuantity,
@@ -160,7 +160,7 @@ export class Orderbook {
   ): { fills: Fill[]; executedQuantity: number } {
     const fills: Fill[] = [];
     let executedQuantity = 0;
-    const fillIndex = fills.length;
+
     this.bids.sort((a, b) => b.price - a.price);
     for (let i = 0; i < this.bids.length; i++) {
       if (this.bids[i].userId === order.userId) {
@@ -180,6 +180,7 @@ export class Orderbook {
         executedQuantity += filledQuantity;
         this.bids[i].filled += filledQuantity;
 
+        const fillIndex = fills.length;
         fills.push({
           price: this.bids[i].price.toString(),
           quantity: filledQuantity,

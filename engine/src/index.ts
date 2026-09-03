@@ -121,11 +121,11 @@ async function main() {
       await engine.process(parsedMessage, streamId);
       console.log("parsedMessage--", parsedMessage);
 
-      console.log("SIMULATED CRASH AFTER PROCESS, BEFORE ACK:", {
-        streamId,
-        type: parsedMessage.message.type,
-        userId: parsedMessage.message.data?.userId,
-      });
+      // console.log("SIMULATED CRASH AFTER PROCESS, BEFORE ACK:", {
+      //   streamId,
+      //   type: parsedMessage.message.type,
+      //   userId: parsedMessage.message.data?.userId,
+      // });
 
       // process.exit(1);
 

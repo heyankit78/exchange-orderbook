@@ -18,6 +18,7 @@ export type OrderUpdateMessage = {
     | {
         orderId: string;
         executedQuantity: number;
+        makerFilledQuantity?: number;
         cancelled?: boolean;
       };
 };
