@@ -14,5 +14,8 @@
   "dependencies": {
     "@repo/shared": "*",
     "axios": "^1.7.2"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
   }
 }
