@@ -418,12 +418,44 @@ export class Engine {
     await this.createDbTrades(side, fills, market, takerUserId);
     await this.updateDbOrders(order, executedQuantity, fills, market);
     await this.publisWsDepthUpdates(fills, price, side, market);
-    await this.publishUserOrderUpdates(fills);
+    await this.publishUserOrderUpdates(order, executedQuantity, fills);
     await this.publishWsTrades(side, fills, market);
     await this.publishUserTradeUpdates(side, fills, market, takerUserId);
     return { executedQuantity, fills, orderId: order.orderId };
   }
-  async publishUserOrderUpdates(fills: Fill[]) {
+  async publishUserOrderUpdates(
+    order: Order,
+    executedQuantity: number,
+    fills: Fill[],
+  ) {
+    // -----------------------------
+    // TAKER / INCOMING ORDER UPDATE
+    // -----------------------------
+
+    let takerStatus: "OPEN" | "PARTIALLY_FILLED" | "FILLED";
+
+    if (executedQuantity === 0) {
+      takerStatus = "OPEN";
+    } else if (executedQuantity >= order.quantity) {
+      takerStatus = "FILLED";
+    } else {
+      takerStatus = "PARTIALLY_FILLED";
+    }
+
+    RedisManager.getInstance().publishMessage(`user_trades@${order.userId}`, {
+      stream: `user_trades@${order.userId}`,
+      data: {
+        e: "order_update",
+        orderId: order.orderId,
+        filled: executedQuantity,
+        status: takerStatus,
+      },
+    });
+
+    // -----------------------------
+    // MAKER ORDER UPDATES
+    // -----------------------------
+
     fills.forEach((fill) => {
       const status =
         fill.makerFilledQuantity >= fill.makerOrderQuantity

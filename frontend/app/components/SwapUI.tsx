@@ -142,28 +142,80 @@ export function SwapUI({ market }: { market: string }) {
   // PLACE ORDER
   // ----------------------------------------
 
+  // const handleSubmit = async () => {
+  //   if (!price || !quantity || Number(price) <= 0 || Number(quantity) <= 0) {
+  //     return;
+  //   }
+
+  //   if (!session?.accessToken) {
+  //     console.error("No token found in session:", session);
+
+  //     return;
+  //   }
+
+  //   try {
+  //     setLoading(true);
+
+  //     await placeOrder(market, price, quantity, activeTab, session.accessToken);
+
+  //     await Promise.all([
+  //       fetchBalance(),
+  //       fetchOpenOrders(),
+  //       // fetchOrderHistory(),
+  //       // fetchMyTrades(),
+  //     ]);
+
+  //     setPrice("");
+  //     setQuantity("");
+  //   } catch (error) {
+  //     console.error("Order failed:", error);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   const handleSubmit = async () => {
     if (!price || !quantity || Number(price) <= 0 || Number(quantity) <= 0) {
       return;
     }
 
-    if (!session?.accessToken) {
-      console.error("No token found in session:", session);
-
-      return;
-    }
+    if (!session?.accessToken) return;
 
     try {
       setLoading(true);
 
-      await placeOrder(market, price, quantity, activeTab, session.accessToken);
+      const response = await placeOrder(
+        market,
+        price,
+        quantity,
+        activeTab,
+        session.accessToken,
+      );
 
-      await Promise.all([
-        fetchBalance(),
-        fetchOpenOrders(),
-        fetchOrderHistory(),
-        // fetchMyTrades(),
+      const executedQuantity = Number(response.executedQuantity);
+
+      const status: OrderHistoryItem["status"] =
+        executedQuantity >= Number(quantity)
+          ? "FILLED"
+          : executedQuantity > 0
+            ? "PARTIALLY_FILLED"
+            : "OPEN";
+
+      const newOrder: OrderHistoryItem = {
+        orderId: response.orderId,
+        market,
+        side: activeTab,
+        price,
+        quantity,
+        filled: String(executedQuantity),
+        status,
+      };
+
+      setOrderHistory((prev) => [
+        newOrder,
+        ...prev.filter((order) => order.orderId !== response.orderId),
       ]);
+
+      await Promise.all([fetchBalance(), fetchOpenOrders()]);
 
       setPrice("");
       setQuantity("");
@@ -211,8 +263,11 @@ export function SwapUI({ market }: { market: string }) {
     });
     signaling.registerCallback(
       "order_update",
-      (update: { orderId: string; filled: number; status: string }) => {
-        console.log("🔥 SWAP UI ORDER UPDATE:", update);
+      (update: {
+        orderId: string;
+        filled: string;
+        status: OrderHistoryItem["status"];
+      }) => {
         setOpenOrders((prev) => {
           if (update.status === "FILLED") {
             return prev.filter((order) => order.orderId !== update.orderId);
@@ -227,6 +282,18 @@ export function SwapUI({ market }: { market: string }) {
               : order,
           );
         });
+
+        setOrderHistory((prev) =>
+          prev.map((order) =>
+            order.orderId === update.orderId
+              ? {
+                  ...order,
+                  filled: update.filled,
+                  status: update.status,
+                }
+              : order,
+          ),
+        );
       },
       `OPEN-ORDER-${userId}`,
     );
@@ -258,7 +325,7 @@ export function SwapUI({ market }: { market: string }) {
 
         // IMPORTANT:
         // refresh history so OPEN becomes CANCELLED
-        fetchOrderHistory(),
+        // fetchOrderHistory(),
       ]);
     } catch (error) {
       console.error("Cancel order failed:", error);
@@ -488,7 +555,7 @@ export function SwapUI({ market }: { market: string }) {
             active={ordersTab === "history"}
             onClick={() => {
               setOrdersTab("history");
-              fetchOrderHistory();
+              // fetchOrderHistory();
             }}
           >
             Order History
