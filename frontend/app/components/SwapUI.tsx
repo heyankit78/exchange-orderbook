@@ -182,16 +182,6 @@ export function SwapUI({ market }: { market: string }) {
 
     signaling.authenticate(session.accessToken);
 
-    signaling.sendMessage({
-      method: "SUBSCRIBE",
-      params: [`user_trades@${userId}`],
-    });
-
-    signaling.sendMessage({
-      method: "SUBSCRIBE",
-      params: ["user_trades@999"],
-    });
-
     const callbackId = `MY-TRADES-${userId}-${market}`;
 
     const handleMyTrade = (trade: MyTrade) => {
