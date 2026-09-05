@@ -9,11 +9,10 @@ export class SignalingManager {
   private bufferedMessages: any[] = [];
   private callbacks: any = {};
   private id: number;
-  private initialized: boolean = false;
+  private initialized = false;
 
   private constructor() {
     this.ws = new WebSocket(BASE_URL);
-    this.bufferedMessages = [];
     this.id = 1;
     this.init();
   }
@@ -22,7 +21,15 @@ export class SignalingManager {
     if (!this.instance) {
       this.instance = new SignalingManager();
     }
+
     return this.instance;
+  }
+
+  authenticate(token: string) {
+    this.sendMessage({
+      method: "AUTH",
+      token,
+    });
   }
 
   init() {

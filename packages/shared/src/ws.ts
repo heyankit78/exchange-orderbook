@@ -1,6 +1,8 @@
 export const SUBSCRIBE = "SUBSCRIBE";
 export const UNSUBSCRIBE = "UNSUBSCRIBE";
 
+export const AUTH = "AUTH";
+
 export type IncomingWsMessage =
   | {
       method: typeof SUBSCRIBE;
@@ -9,6 +11,10 @@ export type IncomingWsMessage =
   | {
       method: typeof UNSUBSCRIBE;
       params: string[];
+    }
+  | {
+      method: typeof AUTH;
+      token: string;
     };
 
 export type WsMessage = {
