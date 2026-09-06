@@ -14,7 +14,13 @@ import {
 
 import { Balances, MyTrade, OpenOrder, OrderHistoryItem } from "../utils/types";
 import { SignalingManager } from "../utils/SignalingManager";
-
+const orderStatusRank = {
+  OPEN: 1,
+  PARTIALLY_FILLED: 2,
+  FILLED: 3,
+  CANCELLED: 3,
+} as const;
+type OrderStatus = keyof typeof orderStatusRank;
 type UserOrdersTab = "open" | "history" | "trades";
 
 export function SwapUI({ market }: { market: string }) {
@@ -129,8 +135,31 @@ export function SwapUI({ market }: { market: string }) {
       setHistoryLoading(true);
 
       const data = await getOrderHistory(market, session.accessToken);
+      setOrderHistory((prev) => {
+        const localOrders = new Map(
+          prev.map((order) => [order.orderId, order]),
+        );
 
-      setOrderHistory(data);
+        return data.map((serverOrder: any) => {
+          const localOrder = localOrders.get(serverOrder.orderId);
+
+          if (!localOrder) {
+            return serverOrder;
+          }
+
+          const localRank = orderStatusRank[localOrder.status as OrderStatus];
+
+          const serverRank = orderStatusRank[serverOrder.status as OrderStatus];
+
+          // local WebSocket state is newer
+          if (localRank > serverRank) {
+            return localOrder;
+          }
+
+          // server is same or newer
+          return serverOrder;
+        });
+      });
     } catch (error) {
       console.error("Failed to fetch order history:", error);
     } finally {
@@ -318,6 +347,16 @@ export function SwapUI({ market }: { market: string }) {
       setCancelingOrderId(orderId);
 
       await cancelOrder(orderId, market, session.accessToken);
+      setOrderHistory((prev) =>
+        prev.map((order) =>
+          order.orderId === orderId
+            ? {
+                ...order,
+                status: "CANCELLED",
+              }
+            : order,
+        ),
+      );
 
       await Promise.all([
         fetchBalance(),
