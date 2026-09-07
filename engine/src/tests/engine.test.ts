@@ -23,13 +23,34 @@ vi.mock("../RedisManager", () => ({
   },
 }));
 
+function createTestEngine() {
+  const engine = new Engine();
+
+  // createOrder() checks PostgreSQL for an existing order.
+  // The real pg.Client is never connect()ed in unit tests, so an unmocked
+  // query() never settles and createOrder hangs forever.
+  // Pretend the DB returns "no existing order".
+  (engine as any).pgClient.query = vi.fn().mockResolvedValue({
+    rows: [],
+  });
+
+  // Prevent unit tests from writing balances to real PostgreSQL.
+  vi.spyOn(engine, "persistBalance").mockResolvedValue();
+  vi.spyOn(engine, "persistAllBalances").mockResolvedValue();
+
+  return engine;
+}
+
 describe("Engine", () => {
   beforeEach(() => {
+    // NOTE: clearAllMocks() only clears call history, not implementations,
+    // so the stubs installed by createTestEngine() survive.
+    // Do NOT switch this to resetAllMocks() / mockReset: true.
     vi.clearAllMocks();
   });
 
-  it("Publishes Trade updates", () => {
-    const engine = new Engine();
+  it("Publishes Trade updates", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -55,7 +76,7 @@ describe("Engine", () => {
 
     const publishSpy = vi.spyOn(engine, "publishWsTrades");
 
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -69,7 +90,7 @@ describe("Engine", () => {
       clientId: "1",
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -86,8 +107,8 @@ describe("Engine", () => {
     expect(publishSpy).toHaveBeenCalledTimes(2);
   });
 
-  it("Rejects buy order when user has insufficient balance", () => {
-    const engine = new Engine();
+  it("Rejects buy order when user has insufficient balance", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -100,7 +121,7 @@ describe("Engine", () => {
       },
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -127,8 +148,8 @@ describe("Engine", () => {
     expect(pushMessageMock).not.toHaveBeenCalled();
   });
 
-  it("Locks INR when buy order is placed", () => {
-    const engine = new Engine();
+  it("Locks INR when buy order is placed", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -141,7 +162,7 @@ describe("Engine", () => {
       },
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -160,8 +181,9 @@ describe("Engine", () => {
     expect(userBalance.INR.available).toBe(8000);
     expect(userBalance.INR.locked).toBe(2000);
   });
-  it("Locks TATA when sell order is placed", () => {
-    const engine = new Engine();
+
+  it("Locks TATA when sell order is placed", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("2", {
       INR: {
@@ -174,7 +196,7 @@ describe("Engine", () => {
       },
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -193,8 +215,9 @@ describe("Engine", () => {
     expect(userBalance.TATA.available).toBe(7);
     expect(userBalance.TATA.locked).toBe(3);
   });
-  it("Updates buyer and seller balances after a complete trade", () => {
-    const engine = new Engine();
+
+  it("Updates buyer and seller balances after a complete trade", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -219,7 +242,7 @@ describe("Engine", () => {
     });
 
     // Buyer places order first
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -234,7 +257,7 @@ describe("Engine", () => {
     });
 
     // Seller matches it
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -259,8 +282,9 @@ describe("Engine", () => {
     expect(sellerBalance.TATA.locked).toBe(0);
     expect(sellerBalance.INR.available).toBe(2000);
   });
-  it("Refunds buyer when trade executes below buy limit price", () => {
-    const engine = new Engine();
+
+  it("Refunds buyer when trade executes below buy limit price", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -285,7 +309,7 @@ describe("Engine", () => {
     });
 
     // Seller becomes maker at 900
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -300,7 +324,7 @@ describe("Engine", () => {
     });
 
     // Buyer is willing to pay up to 1000
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -325,8 +349,9 @@ describe("Engine", () => {
     expect(sellerBalance.TATA.available).toBe(8);
     expect(sellerBalance.TATA.locked).toBe(0);
   });
-  it("Sends trade and order updates to DB worker after a trade", () => {
-    const engine = new Engine();
+
+  it("Sends trade and order updates to DB worker after a trade", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -350,7 +375,7 @@ describe("Engine", () => {
       },
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -364,7 +389,7 @@ describe("Engine", () => {
       clientId: "client-1",
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -393,8 +418,9 @@ describe("Engine", () => {
     expect(tradeMessages.length).toBe(1);
     expect(orderMessages.length).toBe(3);
   });
-  it("Sends correct TRADE_ADDED payload", () => {
-    const engine = new Engine();
+
+  it("Sends correct TRADE_ADDED payload", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -418,7 +444,7 @@ describe("Engine", () => {
       },
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -432,7 +458,7 @@ describe("Engine", () => {
       clientId: "client-1",
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -470,8 +496,9 @@ describe("Engine", () => {
     expect(tradeMessage.data.id).toBeDefined();
     expect(tradeMessage.data.timestamp).toBeDefined();
   });
-  it("Sets isBuyerMaker false when seller is maker", () => {
-    const engine = new Engine();
+
+  it("Sets isBuyerMaker false when seller is maker", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -496,7 +523,7 @@ describe("Engine", () => {
     });
 
     // Seller rests first → seller becomes maker
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -511,7 +538,7 @@ describe("Engine", () => {
     });
 
     // Buyer comes second → buyer is taker
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -548,8 +575,9 @@ describe("Engine", () => {
       },
     });
   });
-  it("Keeps remaining INR locked after a partial buy fill", () => {
-    const engine = new Engine();
+
+  it("Keeps remaining INR locked after a partial buy fill", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -574,7 +602,7 @@ describe("Engine", () => {
     });
 
     // Buyer places BUY 5 @1000
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -589,7 +617,7 @@ describe("Engine", () => {
     });
 
     // Seller only sells 2
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -614,8 +642,9 @@ describe("Engine", () => {
     expect(sellerBalance.TATA.locked).toBe(0);
     expect(sellerBalance.INR.available).toBe(2000);
   });
-  it("Keeps remaining TATA locked after a partial sell fill", () => {
-    const engine = new Engine();
+
+  it("Keeps remaining TATA locked after a partial sell fill", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -640,7 +669,7 @@ describe("Engine", () => {
     });
 
     // Seller places SELL 5 @1000
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -655,7 +684,7 @@ describe("Engine", () => {
     });
 
     // Buyer only buys 2
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -680,8 +709,9 @@ describe("Engine", () => {
     expect(buyerBalance.INR.locked).toBe(0);
     expect(buyerBalance.TATA.available).toBe(2);
   });
-  it("Refunds locked INR when buy order is cancelled", () => {
-    const engine = new Engine();
+
+  it("Refunds locked INR when buy order is cancelled", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -694,7 +724,7 @@ describe("Engine", () => {
       },
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -720,13 +750,13 @@ describe("Engine", () => {
 
     const orderId = orderbook.bids[0].orderId;
 
-    engine.process({
+    await engine.process({
       message: {
         type: CANCEL_ORDER,
         data: {
           market: "TATA_INR",
           orderId,
-          userId: "1", // add
+          userId: "1",
         },
       },
       clientId: "client-1",
@@ -739,8 +769,9 @@ describe("Engine", () => {
 
     expect(orderbook.bids.length).toBe(0);
   });
-  it("Refunds only remaining locked INR after partially filled buy is cancelled", () => {
-    const engine = new Engine();
+
+  it("Refunds only remaining locked INR after partially filled buy is cancelled", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -765,7 +796,7 @@ describe("Engine", () => {
     });
 
     // Buyer places BUY 5 @1000
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -780,7 +811,7 @@ describe("Engine", () => {
     });
 
     // Seller fills only 2
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -810,13 +841,13 @@ describe("Engine", () => {
     expect(beforeCancel.INR.locked).toBe(3000);
     expect(beforeCancel.TATA.available).toBe(2);
 
-    engine.process({
+    await engine.process({
       message: {
         type: CANCEL_ORDER,
         data: {
           market: "TATA_INR",
           orderId: remainingBuyOrder.orderId,
-          userId: "1", // add
+          userId: "1",
         },
       },
       clientId: "client-1",
@@ -830,8 +861,9 @@ describe("Engine", () => {
 
     expect(orderbook.bids.length).toBe(0);
   });
-  it("Refunds only remaining locked TATA after partially filled sell is cancelled", () => {
-    const engine = new Engine();
+
+  it("Refunds only remaining locked TATA after partially filled sell is cancelled", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -856,7 +888,7 @@ describe("Engine", () => {
     });
 
     // Seller places SELL 5
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -871,7 +903,7 @@ describe("Engine", () => {
     });
 
     // Buyer fills only 2
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -901,13 +933,13 @@ describe("Engine", () => {
     expect(beforeCancel.TATA.locked).toBe(3);
     expect(beforeCancel.INR.available).toBe(2000);
 
-    engine.process({
+    await engine.process({
       message: {
         type: CANCEL_ORDER,
         data: {
           market: "TATA_INR",
           orderId: remainingSellOrder.orderId,
-          userId: "2", // add
+          userId: "2",
         },
       },
       clientId: "client-2",
@@ -921,8 +953,9 @@ describe("Engine", () => {
 
     expect(orderbook.asks.length).toBe(0);
   });
-  it("Prevents self trade at Engine level", () => {
-    const engine = new Engine();
+
+  it("Prevents self trade at Engine level", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -936,7 +969,7 @@ describe("Engine", () => {
     });
 
     // User 1 places SELL first
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -951,7 +984,7 @@ describe("Engine", () => {
     });
 
     // Same user places matching BUY
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -980,8 +1013,9 @@ describe("Engine", () => {
     expect(orderbook.asks.length).toBe(1);
     expect(orderbook.bids.length).toBe(1);
   });
-  it("Rejects sell order when user has insufficient TATA balance", () => {
-    const engine = new Engine();
+
+  it("Rejects sell order when user has insufficient TATA balance", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("2", {
       INR: {
@@ -994,7 +1028,7 @@ describe("Engine", () => {
       },
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1025,8 +1059,9 @@ describe("Engine", () => {
     expect(userBalance.TATA.available).toBe(1);
     expect(userBalance.TATA.locked).toBe(0);
   });
-  it("Matches multiple maker orders in correct price order", () => {
-    const engine = new Engine();
+
+  it("Matches multiple maker orders in correct price order", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: { available: 10000, locked: 0 },
@@ -1044,7 +1079,7 @@ describe("Engine", () => {
     });
 
     // Seller A
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1059,7 +1094,7 @@ describe("Engine", () => {
     });
 
     // Seller B
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1074,7 +1109,7 @@ describe("Engine", () => {
     });
 
     // Buyer takes both
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1102,8 +1137,9 @@ describe("Engine", () => {
     expect(tradeMessages[1].data.price).toBe("950");
     expect(tradeMessages[1].data.quantity).toBe("2");
   });
-  it("Matches same-price maker orders in FIFO order", () => {
-    const engine = new Engine();
+
+  it("Matches same-price maker orders in FIFO order", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: { available: 10000, locked: 0 },
@@ -1121,7 +1157,7 @@ describe("Engine", () => {
     });
 
     // Seller A arrives first
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1136,7 +1172,7 @@ describe("Engine", () => {
     });
 
     // Seller B arrives second
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1151,7 +1187,7 @@ describe("Engine", () => {
     });
 
     // Buyer takes 3
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1181,8 +1217,9 @@ describe("Engine", () => {
     expect(tradeMessages[1].data.sellerUserId).toBe("3");
     expect(tradeMessages[1].data.quantity).toBe("1");
   });
-  it("Does not create a trade when orders do not cross", () => {
-    const engine = new Engine();
+
+  it("Does not create a trade when orders do not cross", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: { available: 10000, locked: 0 },
@@ -1195,7 +1232,7 @@ describe("Engine", () => {
     });
 
     // BUY rests
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1210,7 +1247,7 @@ describe("Engine", () => {
     });
 
     // SELL is too expensive to match
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1242,8 +1279,9 @@ describe("Engine", () => {
     expect(orderbook.bids[0].price).toBe(1000);
     expect(orderbook.asks[0].price).toBe(1001);
   });
-  it("Executes at maker price when incoming buy crosses a better ask", () => {
-    const engine = new Engine();
+
+  it("Executes at maker price when incoming buy crosses a better ask", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: { available: 10000, locked: 0 },
@@ -1256,7 +1294,7 @@ describe("Engine", () => {
     });
 
     // Seller is maker
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1271,7 +1309,7 @@ describe("Engine", () => {
     });
 
     // Buyer is taker, limit is 1000
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1302,8 +1340,9 @@ describe("Engine", () => {
 
     expect(tradeMessage.data.isBuyerMaker).toBe(false);
   });
-  it("Executes at maker price when incoming sell crosses a better bid", () => {
-    const engine = new Engine();
+
+  it("Executes at maker price when incoming sell crosses a better bid", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: { available: 10000, locked: 0 },
@@ -1316,7 +1355,7 @@ describe("Engine", () => {
     });
 
     // Buyer is maker
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1331,7 +1370,7 @@ describe("Engine", () => {
     });
 
     // Seller is taker
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1362,8 +1401,9 @@ describe("Engine", () => {
 
     expect(tradeMessage.data.isBuyerMaker).toBe(true);
   });
-  it("Does not overfill a partially filled maker order", () => {
-    const engine = new Engine();
+
+  it("Does not overfill a partially filled maker order", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: { available: 10000, locked: 0 },
@@ -1388,7 +1428,7 @@ describe("Engine", () => {
       userId: "2",
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1423,8 +1463,9 @@ describe("Engine", () => {
 
     expect(orderbook.bids[0].quantity - orderbook.bids[0].filled).toBe(2);
   });
-  it("Consumes multiple makers correctly when one maker is already partially filled", () => {
-    const engine = new Engine();
+
+  it("Consumes multiple makers correctly when one maker is already partially filled", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: { available: 10000, locked: 0 },
@@ -1466,7 +1507,7 @@ describe("Engine", () => {
     });
 
     // Incoming buyer wants 5
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1516,8 +1557,9 @@ describe("Engine", () => {
     // Incoming BUY completely filled → should not rest in bids
     expect(orderbook.bids.length).toBe(0);
   });
-  it("Does not allow user to cancel another user's order", () => {
-    const engine = new Engine();
+
+  it("Does not allow user to cancel another user's order", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: { available: 10000, locked: 0 },
@@ -1530,7 +1572,7 @@ describe("Engine", () => {
     });
 
     // User 1 creates BUY
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1551,7 +1593,7 @@ describe("Engine", () => {
     const orderId = orderbook.bids[0].orderId;
 
     // User 2 tries to cancel User 1's order
-    engine.process({
+    await engine.process({
       message: {
         type: CANCEL_ORDER,
         data: {
@@ -1573,15 +1615,16 @@ describe("Engine", () => {
     expect(user1Balance.INR.available).toBe(8000);
     expect(user1Balance.INR.locked).toBe(2000);
   });
-  it("Does not cancel a non-existent order", () => {
-    const engine = new Engine();
+
+  it("Does not cancel a non-existent order", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: { available: 10000, locked: 0 },
       TATA: { available: 0, locked: 0 },
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: CANCEL_ORDER,
         data: {
@@ -1605,8 +1648,9 @@ describe("Engine", () => {
     expect(orderbook.bids.length).toBe(0);
     expect(orderbook.asks.length).toBe(0);
   });
-  it("Returns user balance", () => {
-    const engine = new Engine();
+
+  it("Returns user balance", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -1619,7 +1663,7 @@ describe("Engine", () => {
       },
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: GET_BALANCE,
         data: {
@@ -1643,8 +1687,9 @@ describe("Engine", () => {
       },
     });
   });
-  it("Returns only the user's open orders", () => {
-    const engine = new Engine();
+
+  it("Returns only the user's open orders", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: { available: 10000, locked: 0 },
@@ -1657,7 +1702,7 @@ describe("Engine", () => {
     });
 
     // User 1 BUY
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1672,7 +1717,7 @@ describe("Engine", () => {
     });
 
     // User 2 SELL - deliberately non-crossing
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1686,9 +1731,10 @@ describe("Engine", () => {
       clientId: "client-2",
     });
 
+    // Only clears call history — the pgClient/persist stubs stay in place.
     vi.clearAllMocks();
 
-    engine.process({
+    await engine.process({
       message: {
         type: GET_OPEN_ORDERS,
         data: {
@@ -1714,8 +1760,9 @@ describe("Engine", () => {
       filled: 0,
     });
   });
-  it("Returns correct market depth", () => {
-    const engine = new Engine();
+
+  it("Returns correct market depth", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: { available: 10000, locked: 0 },
@@ -1728,7 +1775,7 @@ describe("Engine", () => {
     });
 
     // BUY rests
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1743,7 +1790,7 @@ describe("Engine", () => {
     });
 
     // SELL rests, does not cross
-    engine.process({
+    await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
@@ -1759,7 +1806,7 @@ describe("Engine", () => {
 
     vi.clearAllMocks();
 
-    engine.process({
+    await engine.process({
       message: {
         type: GET_DEPTH,
         data: {
@@ -1779,13 +1826,11 @@ describe("Engine", () => {
       },
     });
   });
+
   it("Creates default balances for a new user on ramp", async () => {
-    const engine = new Engine();
+    const engine = createTestEngine();
 
-    // Avoid real PostgreSQL calls in this unit test
-    vi.spyOn(engine, "persistAllBalances").mockResolvedValue();
-
-    engine.process({
+    await engine.process({
       message: {
         type: ON_RAMP,
         data: {
@@ -1797,10 +1842,6 @@ describe("Engine", () => {
       clientId: "client-99",
     });
 
-    // onRamp is async and process() fire-and-forgets it,
-    // so wait one tick
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
     const userBalance = (engine as any).balances.get("99");
 
     expect(userBalance.INR.available).toBe(5000);
@@ -1811,10 +1852,9 @@ describe("Engine", () => {
     expect(userBalance.BTC.available).toBe(1);
     expect(userBalance.ETH.available).toBe(10);
   });
-  it("Adds INR to an existing user on ramp", async () => {
-    const engine = new Engine();
 
-    vi.spyOn(engine, "persistAllBalances").mockResolvedValue();
+  it("Adds INR to an existing user on ramp", async () => {
+    const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
       INR: {
@@ -1831,7 +1871,7 @@ describe("Engine", () => {
       },
     });
 
-    engine.process({
+    await engine.process({
       message: {
         type: ON_RAMP,
         data: {
@@ -1843,8 +1883,6 @@ describe("Engine", () => {
       clientId: "client-1",
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
     const userBalance = (engine as any).balances.get("1");
 
     expect(userBalance.INR.available).toBe(1500);
@@ -1855,10 +1893,11 @@ describe("Engine", () => {
 
     expect(userBalance.BTC.available).toBe(1);
   });
-  it("Returns empty depth for invalid market", () => {
-    const engine = new Engine();
 
-    engine.process({
+  it("Returns empty depth for invalid market", async () => {
+    const engine = createTestEngine();
+
+    await engine.process({
       message: {
         type: GET_DEPTH,
         data: {
@@ -1875,5 +1914,87 @@ describe("Engine", () => {
         asks: [],
       },
     });
+  });
+
+  it("Publishes FILLED order_update for taker", async () => {
+    const engine = createTestEngine();
+
+    // Buyer
+    (engine as any).balances.set("1", {
+      INR: {
+        available: 10000,
+        locked: 0,
+      },
+      TATA: {
+        available: 0,
+        locked: 0,
+      },
+    });
+
+    // Seller
+    (engine as any).balances.set("2", {
+      INR: {
+        available: 0,
+        locked: 0,
+      },
+      TATA: {
+        available: 10,
+        locked: 0,
+      },
+    });
+
+    // ----------------------------------
+    // 1. Seller places order first
+    //    Seller = MAKER
+    // ----------------------------------
+    await engine.process({
+      message: {
+        type: CREATE_ORDER,
+        data: {
+          market: "TATA_INR",
+          price: "1000",
+          quantity: "1",
+          side: "sell",
+          userId: "2",
+        },
+      },
+      clientId: "client-2",
+    });
+
+    // Ignore messages generated by maker order
+    publishMessageMock.mockClear();
+
+    // ----------------------------------
+    // 2. Buyer comes second
+    //    Buyer = TAKER
+    //    Full match
+    // ----------------------------------
+    await engine.process({
+      message: {
+        type: CREATE_ORDER,
+        data: {
+          market: "TATA_INR",
+          price: "1000",
+          quantity: "1",
+          side: "buy",
+          userId: "1",
+        },
+      },
+      clientId: "client-1",
+    });
+
+    // ----------------------------------
+    // 3. Taker should receive FILLED
+    // ----------------------------------
+    expect(publishMessageMock).toHaveBeenCalledWith(
+      "user_trades@1",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          e: "order_update",
+          filled: 1,
+          status: "FILLED",
+        }),
+      }),
+    );
   });
 });
