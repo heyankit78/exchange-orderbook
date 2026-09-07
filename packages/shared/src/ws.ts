@@ -1,6 +1,5 @@
 export const SUBSCRIBE = "SUBSCRIBE";
 export const UNSUBSCRIBE = "UNSUBSCRIBE";
-
 export const AUTH = "AUTH";
 
 export type IncomingWsMessage =
@@ -22,7 +21,6 @@ export type WsMessage = {
 
   data:
     | {
-        // TICKER
         e: "ticker";
         id: number;
         c?: string;
@@ -33,13 +31,11 @@ export type WsMessage = {
         s?: string;
       }
     | {
-        // DEPTH
         e: "depth";
         b?: [string, string][];
         a?: [string, string][];
       }
     | {
-        // PUBLIC TRADE
         e: "trade";
         t: string;
         m: boolean;
@@ -50,11 +46,10 @@ export type WsMessage = {
     | {
         e: "order_update";
         orderId: string;
-        filled: number;
+        filled: string;
         status: "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
       }
     | {
-        // PRIVATE USER TRADE
         e: "my_trade";
         t: string;
         p: string;
@@ -64,29 +59,3 @@ export type WsMessage = {
         timestamp: number;
       };
 };
-
-export type TickerUpdateMessage = {
-  type: "ticker";
-  data: {
-    c?: string;
-    h?: string;
-    l?: string;
-    v?: string;
-    V?: string;
-    s?: string;
-    id: number;
-    e: "ticker";
-  };
-};
-
-export type DepthUpdateMessage = {
-  type: "depth";
-  data: {
-    b?: [string, string][];
-    a?: [string, string][];
-    id: number;
-    e: "depth";
-  };
-};
-
-export type OutgoingMessage = TickerUpdateMessage | DepthUpdateMessage;

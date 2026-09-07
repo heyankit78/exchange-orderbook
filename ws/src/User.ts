@@ -1,15 +1,40 @@
 import { WebSocket } from "ws";
 import jwt from "jsonwebtoken";
+
 import { SubscriptionManager } from "./SubscriptionManager";
+
 import {
   AUTH,
   IncomingWsMessage,
-  OutgoingMessage,
   SUBSCRIBE,
   UNSUBSCRIBE,
+  WsMessage,
 } from "@repo/shared";
 
 const JWT_SECRET = "my-super-secret-key";
+
+function isIncomingWsMessage(message: unknown): message is IncomingWsMessage {
+  if (!message || typeof message !== "object") {
+    return false;
+  }
+
+  const parsed = message as Record<string, unknown>;
+
+  // AUTH
+  if (parsed.method === AUTH) {
+    return typeof parsed.token === "string";
+  }
+
+  // SUBSCRIBE / UNSUBSCRIBE
+  if (parsed.method === SUBSCRIBE || parsed.method === UNSUBSCRIBE) {
+    return (
+      Array.isArray(parsed.params) &&
+      parsed.params.every((item) => typeof item === "string")
+    );
+  }
+
+  return false;
+}
 
 export class User {
   private connectionId: string;
@@ -26,6 +51,7 @@ export class User {
     this.connectionId = connectionId;
     this.ws = ws;
     this.authenticatedUserId = authenticatedUserId;
+
     this.addListeners();
   }
 
@@ -37,16 +63,38 @@ export class User {
     this.subscriptions = this.subscriptions.filter((s) => s !== subscription);
   }
 
-  emit(message: OutgoingMessage) {
+  emit(message: WsMessage) {
     this.ws.send(JSON.stringify(message));
   }
 
   private addListeners() {
-    this.ws.on("message", (message: string) => {
-      const parsedMessage: IncomingWsMessage = JSON.parse(message);
+    this.ws.on("message", (message) => {
+      let parsedMessage: unknown;
 
-      // 1. AUTHENTICATE THIS WEBSOCKET CONNECTION
-      if (parsedMessage.method === "AUTH") {
+      // 1. PARSE JSON SAFELY
+      try {
+        parsedMessage = JSON.parse(message.toString());
+      } catch {
+        console.log("Invalid WebSocket JSON");
+
+        return;
+      }
+
+      // 2. VALIDATE MESSAGE SHAPE
+      if (!isIncomingWsMessage(parsedMessage)) {
+        console.log("Invalid WebSocket message:", parsedMessage);
+
+        return;
+      }
+
+      // From here:
+      // parsedMessage is IncomingWsMessage
+
+      // =====================================
+      // AUTH
+      // =====================================
+
+      if (parsedMessage.method === AUTH) {
         try {
           const payload = jwt.verify(parsedMessage.token, JWT_SECRET) as {
             userId: string;
@@ -58,16 +106,20 @@ export class User {
             "WebSocket authenticated user:",
             this.authenticatedUserId,
           );
-        } catch (error) {
+        } catch {
           console.log("Invalid WebSocket token");
         }
 
         return;
       }
 
-      // 2. SUBSCRIBE
+      // =====================================
+      // SUBSCRIBE
+      // =====================================
+
       if (parsedMessage.method === SUBSCRIBE) {
-        parsedMessage.params.forEach((subscription: string) => {
+        parsedMessage.params.forEach((subscription) => {
+          // PRIVATE CHANNEL
           if (subscription.startsWith("user_trades@")) {
             const requestedUserId = subscription.split("@")[1];
 
@@ -86,16 +138,21 @@ export class User {
             subscription,
           );
         });
+
+        return;
       }
 
-      // 3. UNSUBSCRIBE
+      // =====================================
+      // UNSUBSCRIBE
+      // =====================================
+
       if (parsedMessage.method === UNSUBSCRIBE) {
-        parsedMessage.params.forEach((subscription: string) =>
+        parsedMessage.params.forEach((subscription) => {
           SubscriptionManager.getInstance().unsubscribe(
             this.connectionId,
             subscription,
-          ),
-        );
+          );
+        });
       }
     });
   }

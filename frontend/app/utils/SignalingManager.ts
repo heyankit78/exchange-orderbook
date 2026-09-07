@@ -1,3 +1,4 @@
+import { IncomingWsMessage, WsMessage } from "@repo/shared";
 import { Ticker } from "./types";
 
 export const BASE_URL = "ws://localhost:3001";
@@ -74,7 +75,7 @@ export class SignalingManager {
     };
 
     this.ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
+      const message: WsMessage = JSON.parse(event.data);
 
       if (!message?.data?.e) {
         return;
@@ -196,11 +197,7 @@ export class SignalingManager {
   // PUBLIC SEND MESSAGE
   // =====================================================
 
-  sendMessage(message: any) {
-    // =====================================================
-    // SUBSCRIBE
-    // =====================================================
-
+  sendMessage(message: IncomingWsMessage) {
     if (message.method === "SUBSCRIBE") {
       const subscriptionsToSend: string[] = [];
 
