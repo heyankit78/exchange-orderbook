@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 
+import { createPortal } from "react-dom";
 import {
   cancelOrder,
   getBalance,
@@ -23,7 +24,13 @@ const orderStatusRank = {
 type OrderStatus = keyof typeof orderStatusRank;
 type UserOrdersTab = "open" | "history" | "trades";
 
-export function SwapUI({ market }: { market: string }) {
+export function SwapUI({
+  market,
+  ordersPortalId,
+}: {
+  market: string;
+  ordersPortalId?: string;
+}) {
   const { data: session } = useSession();
 
   const [price, setPrice] = useState("");
@@ -59,6 +66,17 @@ export function SwapUI({ market }: { market: string }) {
 
   const [myTrades, setMyTrades] = useState<MyTrade[]>([]);
   const [myTradesLoading, setMyTradesLoading] = useState(false);
+
+  const [ordersPortalTarget, setOrdersPortalTarget] =
+    useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!ordersPortalId) return;
+
+    const element = document.getElementById(ordersPortalId);
+
+    setOrdersPortalTarget(element);
+  }, [ordersPortalId]);
 
   // ----------------------------------------
   // FETCH BALANCE
@@ -400,51 +418,319 @@ export function SwapUI({ market }: { market: string }) {
 
   const insufficientBalance = requiredBalance > availableBalance;
 
-  return (
-    <div className="h-[calc(100vh-60px)] flex flex-col overflow-hidden">
-      {/* ======================================
-          BUY / SELL FORM
-      ====================================== */}
+  const userOrdersPanel = (
+    <div className="h-full flex flex-col bg-baseBackgroundL1">
+      {/* TAB HEADER */}
 
-      <div className="flex flex-col  shrink-0">
-        <div className="flex flex-row h-[60px]">
-          <BuyButton activeTab={activeTab} setActiveTab={setActiveTab} />
+      <div className="flex shrink-0 items-center gap-6 px-4 border-b border-baseBorderLight overflow-x-auto">
+        <OrderTabButton
+          active={ordersTab === "open"}
+          onClick={() => setOrdersTab("open")}
+        >
+          Open Orders
+          {openOrders.length > 0 && (
+            <span className="ml-1 text-[10px] bg-baseBackgroundL3 px-1.5 py-0.5 rounded">
+              {openOrders.length}
+            </span>
+          )}
+        </OrderTabButton>
 
-          <SellButton activeTab={activeTab} setActiveTab={setActiveTab} />
+        <OrderTabButton
+          active={ordersTab === "history"}
+          onClick={() => {
+            setOrdersTab("history");
+          }}
+        >
+          Order History
+        </OrderTabButton>
+
+        <OrderTabButton
+          active={ordersTab === "trades"}
+          onClick={() => {
+            setOrdersTab("trades");
+            fetchMyTrades();
+          }}
+        >
+          My Trades
+        </OrderTabButton>
+      </div>
+
+      {/* ==============================
+            OPEN ORDERS
+        ============================== */}
+
+      {ordersTab === "open" && (
+        <div className="flex-1 overflow-auto px-4 py-3">
+          {ordersLoading ? (
+            <p className="text-xs text-baseTextMedEmphasis">
+              Loading orders...
+            </p>
+          ) : openOrders.length === 0 ? (
+            <EmptyState text="No open orders" />
+          ) : (
+            <>
+              <div className="grid grid-cols-6 gap-4 pb-2 text-[11px] text-baseTextMedEmphasis">
+                <span>Side</span>
+                <span>Price</span>
+                <span>Quantity</span>
+                <span>Filled</span>
+                <span>Remaining</span>
+                <span className="text-right">Action</span>
+              </div>
+
+              <div>
+                {openOrders.map((order) => {
+                  const remaining =
+                    Number(order.quantity) - Number(order.filled);
+
+                  return (
+                    <div
+                      key={order.orderId}
+                      className="grid grid-cols-6 gap-4 items-center border-t border-baseBorderLight py-2.5 text-xs hover:bg-baseBackgroundL2"
+                    >
+                      <span
+                        className={
+                          order.side === "buy"
+                            ? "text-greenText font-medium"
+                            : "text-redText font-medium"
+                        }
+                      >
+                        {order.side.toUpperCase()}
+                      </span>
+
+                      <span>{order.price}</span>
+
+                      <span>{order.quantity}</span>
+
+                      <span>{order.filled}</span>
+
+                      <span>{remaining}</span>
+
+                      <div className="flex justify-end">
+                        <button
+                          disabled={cancelingOrderId === order.orderId}
+                          onClick={() => handleCancelOrder(order.orderId)}
+                          className="px-3 py-1 rounded bg-baseBackgroundL2 hover:bg-baseBackgroundL3 text-xs disabled:opacity-50"
+                        >
+                          {cancelingOrderId === order.orderId
+                            ? "Cancelling..."
+                            : "Cancel"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
+      )}
 
-        <div className="flex flex-col gap-1">
-          <div className="px-3">
-            <div className="flex flex-row flex-0 gap-5">
-              <LimitButton type={type} setType={setType} />
+      {/* ==============================
+            ORDER HISTORY
+        ============================== */}
 
-              <MarketButton type={type} setType={setType} />
-            </div>
+      {ordersTab === "history" && (
+        <div className="flex-1 overflow-hidden px-4 py-3">
+          {historyLoading ? (
+            <p className="text-xs text-baseTextMedEmphasis">
+              Loading history...
+            </p>
+          ) : orderHistory.length === 0 ? (
+            <EmptyState text="No order history" />
+          ) : (
+            <>
+              <div className="grid grid-cols-[80px_1fr_120px_140px] items-center gap-4 pb-2 text-[11px] text-baseTextMedEmphasis">
+                <span>Side</span>
+
+                <span>Price</span>
+
+                <span>Filled</span>
+
+                <span>Status</span>
+              </div>
+
+              <div className="h-[190px] overflow-y-auto overflow-x-hidden pr-2 [scrollbar-width:thin] [scrollbar-color:#4b5563_transparent]">
+                {orderHistory.map((order) => (
+                  <div
+                    key={order.orderId}
+                    className="grid grid-cols-[80px_1fr_120px_140px] items-center gap-4 border-t border-baseBorderLight py-2.5 text-xs hover:bg-baseBackgroundL2"
+                  >
+                    <span
+                      className={
+                        order.side === "buy"
+                          ? "text-greenText font-medium"
+                          : "text-redText font-medium"
+                      }
+                    >
+                      {order.side.toUpperCase()}
+                    </span>
+
+                    <span className="font-medium">
+                      {Number(order.price).toFixed(2)}
+                    </span>
+
+                    <span>
+                      {Number(order.filled)}/{Number(order.quantity)}
+                    </span>
+
+                    <OrderStatusBadge status={order.status} />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ==============================
+            MY TRADES
+        ============================== */}
+
+      {ordersTab === "trades" && (
+        <div className="flex-1 overflow-hidden px-4 py-3">
+          {myTradesLoading ? (
+            <p className="text-xs text-baseTextMedEmphasis">
+              Loading trades...
+            </p>
+          ) : myTrades.length === 0 ? (
+            <EmptyState text="No trades yet" />
+          ) : (
+            <>
+              <div className="grid grid-cols-[80px_120px_100px_120px_1fr] items-center gap-4 pb-2 text-[11px] text-baseTextMedEmphasis">
+                <span>Side</span>
+
+                <span>Price</span>
+
+                <span>Qty</span>
+
+                <span>Value</span>
+
+                <span>Time</span>
+              </div>
+
+              <div className="h-[190px] overflow-y-auto overflow-x-hidden pr-2 [scrollbar-width:thin] [scrollbar-color:#4b5563_transparent]">
+                {myTrades.map((trade) => {
+                  const value = Number(trade.price) * Number(trade.quantity);
+
+                  return (
+                    <div
+                      key={trade.tradeId}
+                      className="grid grid-cols-[80px_120px_100px_120px_1fr] items-center gap-4 border-t border-baseBorderLight py-2.5 text-xs hover:bg-baseBackgroundL2"
+                    >
+                      <span
+                        className={
+                          trade.side === "buy"
+                            ? "text-greenText font-semibold"
+                            : "text-redText font-semibold"
+                        }
+                      >
+                        {trade.side.toUpperCase()}
+                      </span>
+
+                      <span className="font-medium">
+                        {Number(trade.price).toFixed(2)}
+                      </span>
+
+                      <span>{Number(trade.quantity)}</span>
+
+                      <span className="text-baseTextMedEmphasis">
+                        {value.toFixed(2)}
+                      </span>
+
+                      <span className="text-xs text-baseTextMedEmphasis whitespace-nowrap">
+                        {trade.createdAt
+                          ? new Date(trade.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              second: "2-digit",
+                            })
+                          : "-"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      <div className="h-full flex flex-col overflow-y-auto overflow-x-hidden bg-baseBackgroundL1">
+        {/* ======================================
+                BUY / SELL FORM
+            ====================================== */}
+        <div className="flex flex-col  shrink-0">
+          <div className="flex flex-row h-[60px]">
+            <BuyButton activeTab={activeTab} setActiveTab={setActiveTab} />
+
+            <SellButton activeTab={activeTab} setActiveTab={setActiveTab} />
           </div>
 
-          <div className="flex flex-col px-3">
-            {/* AVAILABLE BALANCE */}
+          <div className="flex flex-col gap-1">
+            <div className="px-3">
+              <div className="flex flex-row flex-0 gap-5">
+                <LimitButton type={type} setType={setType} />
 
-            <div className="flex flex-col flex-1 gap-3 text-baseTextHighEmphasis">
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between flex-row">
+                <MarketButton type={type} setType={setType} />
+              </div>
+            </div>
+
+            <div className="flex flex-col px-3">
+              {/* AVAILABLE BALANCE */}
+
+              <div className="flex flex-col flex-1 gap-3 text-baseTextHighEmphasis">
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between flex-row">
+                    <p className="text-xs font-normal text-baseTextMedEmphasis">
+                      Available Balance
+                    </p>
+
+                    <p className="font-medium text-xs text-baseTextHighEmphasis">
+                      {balanceLoading || availableBalance === undefined
+                        ? "Loading..."
+                        : `${availableBalance.toFixed(2)} ${balanceAsset}`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* PRICE */}
+
+                <div className="flex flex-col gap-2">
                   <p className="text-xs font-normal text-baseTextMedEmphasis">
-                    Available Balance
+                    Price
                   </p>
 
-                  <p className="font-medium text-xs text-baseTextHighEmphasis">
-                    {balanceLoading || availableBalance === undefined
-                      ? "Loading..."
-                      : `${availableBalance.toFixed(2)} ${balanceAsset}`}
-                  </p>
+                  <div className="flex flex-col relative">
+                    <input
+                      step="0.01"
+                      placeholder="0"
+                      className="h-12 rounded-lg border-2 border-solid border-baseBorderLight bg-baseBackgroundL1 pr-12 text-right text-2xl leading-9 text-baseTextHighEmphasis placeholder-baseTextMedEmphasis ring-0 transition focus:border-accentBlue focus:ring-0"
+                      type="text"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                    />
+
+                    <div className="flex flex-row absolute right-1 top-1 p-2">
+                      <div className="relative">
+                        <span className="text-xs font-medium">
+                          {quoteAsset}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* PRICE */}
+              {/* QUANTITY */}
 
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 mt-3">
                 <p className="text-xs font-normal text-baseTextMedEmphasis">
-                  Price
+                  Quantity
                 </p>
 
                 <div className="flex flex-col relative">
@@ -453,116 +739,91 @@ export function SwapUI({ market }: { market: string }) {
                     placeholder="0"
                     className="h-12 rounded-lg border-2 border-solid border-baseBorderLight bg-baseBackgroundL1 pr-12 text-right text-2xl leading-9 text-baseTextHighEmphasis placeholder-baseTextMedEmphasis ring-0 transition focus:border-accentBlue focus:ring-0"
                     type="text"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
                   />
 
                   <div className="flex flex-row absolute right-1 top-1 p-2">
-                    <div className="relative">
-                      <span className="text-xs font-medium">{quoteAsset}</span>
+                    <span className="text-xs font-medium">{baseAsset}</span>
+                  </div>
+                </div>
+
+                {/* TOTAL */}
+
+                <div className="flex justify-end flex-row">
+                  <p className="font-medium pr-2 text-xs text-baseTextMedEmphasis">
+                    ≈ {total.toFixed(2)} {quoteAsset}
+                  </p>
+                </div>
+
+                {/* PERCENTAGE BUTTONS */}
+
+                <div className="flex justify-center flex-row mt-2 gap-3">
+                  {["25%", "50%", "75%", "Max"].map((item) => (
+                    <div
+                      key={item}
+                      className="flex items-center justify-center flex-row rounded-full px-[16px] py-[6px] text-xs cursor-pointer bg-baseBackgroundL2 hover:bg-baseBackgroundL3 text-baseTextMedEmphasis"
+                    >
+                      {item}
                     </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* SUBMIT */}
+
+              <button
+                type="button"
+                disabled={
+                  loading ||
+                  balanceLoading ||
+                  !price ||
+                  !quantity ||
+                  insufficientBalance
+                }
+                onClick={handleSubmit}
+                className={`font-semibold focus:outline-none text-center h-12 rounded-xl text-base px-4 py-2 my-4 active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  activeTab === "buy"
+                    ? "bg-greenPrimaryButtonBackground text-greenPrimaryButtonText"
+                    : "bg-redText text-white"
+                }`}
+              >
+                {loading
+                  ? "Placing order..."
+                  : insufficientBalance
+                    ? "Insufficient Balance"
+                    : activeTab === "buy"
+                      ? "Buy"
+                      : "Sell"}
+              </button>
+
+              {/* FLAGS */}
+
+              <div className="flex justify-between flex-row mt-1">
+                <div className="flex flex-row gap-2">
+                  <div className="flex items-center">
+                    <input
+                      className="form-checkbox rounded border border-solid border-baseBorderMed bg-baseBackgroundL1 h-5 w-5"
+                      id="postOnly"
+                      type="checkbox"
+                    />
+
+                    <label className="ml-2 text-xs text-baseTextMedEmphasis">
+                      Post Only
+                    </label>
                   </div>
-                </div>
-              </div>
-            </div>
 
-            {/* QUANTITY */}
+                  <div className="flex items-center">
+                    <input
+                      className="form-checkbox rounded border border-solid border-baseBorderMed bg-baseBackgroundL1 h-5 w-5"
+                      id="ioc"
+                      type="checkbox"
+                    />
 
-            <div className="flex flex-col gap-2 mt-3">
-              <p className="text-xs font-normal text-baseTextMedEmphasis">
-                Quantity
-              </p>
-
-              <div className="flex flex-col relative">
-                <input
-                  step="0.01"
-                  placeholder="0"
-                  className="h-12 rounded-lg border-2 border-solid border-baseBorderLight bg-baseBackgroundL1 pr-12 text-right text-2xl leading-9 text-baseTextHighEmphasis placeholder-baseTextMedEmphasis ring-0 transition focus:border-accentBlue focus:ring-0"
-                  type="text"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                />
-
-                <div className="flex flex-row absolute right-1 top-1 p-2">
-                  <span className="text-xs font-medium">{baseAsset}</span>
-                </div>
-              </div>
-
-              {/* TOTAL */}
-
-              <div className="flex justify-end flex-row">
-                <p className="font-medium pr-2 text-xs text-baseTextMedEmphasis">
-                  ≈ {total.toFixed(2)} {quoteAsset}
-                </p>
-              </div>
-
-              {/* PERCENTAGE BUTTONS */}
-
-              <div className="flex justify-center flex-row mt-2 gap-3">
-                {["25%", "50%", "75%", "Max"].map((item) => (
-                  <div
-                    key={item}
-                    className="flex items-center justify-center flex-row rounded-full px-[16px] py-[6px] text-xs cursor-pointer bg-baseBackgroundL2 hover:bg-baseBackgroundL3 text-baseTextMedEmphasis"
-                  >
-                    {item}
+                    <label className="ml-2 text-xs text-baseTextMedEmphasis">
+                      IOC
+                    </label>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* SUBMIT */}
-
-            <button
-              type="button"
-              disabled={
-                loading ||
-                balanceLoading ||
-                !price ||
-                !quantity ||
-                insufficientBalance
-              }
-              onClick={handleSubmit}
-              className={`font-semibold focus:outline-none text-center h-12 rounded-xl text-base px-4 py-2 my-4 active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed ${
-                activeTab === "buy"
-                  ? "bg-greenPrimaryButtonBackground text-greenPrimaryButtonText"
-                  : "bg-redText text-white"
-              }`}
-            >
-              {loading
-                ? "Placing order..."
-                : insufficientBalance
-                  ? "Insufficient Balance"
-                  : activeTab === "buy"
-                    ? "Buy"
-                    : "Sell"}
-            </button>
-
-            {/* FLAGS */}
-
-            <div className="flex justify-between flex-row mt-1">
-              <div className="flex flex-row gap-2">
-                <div className="flex items-center">
-                  <input
-                    className="form-checkbox rounded border border-solid border-baseBorderMed bg-baseBackgroundL1 h-5 w-5"
-                    id="postOnly"
-                    type="checkbox"
-                  />
-
-                  <label className="ml-2 text-xs text-baseTextMedEmphasis">
-                    Post Only
-                  </label>
-                </div>
-
-                <div className="flex items-center">
-                  <input
-                    className="form-checkbox rounded border border-solid border-baseBorderMed bg-baseBackgroundL1 h-5 w-5"
-                    id="ioc"
-                    type="checkbox"
-                  />
-
-                  <label className="ml-2 text-xs text-baseTextMedEmphasis">
-                    IOC
-                  </label>
                 </div>
               </div>
             </div>
@@ -570,296 +831,8 @@ export function SwapUI({ market }: { market: string }) {
         </div>
       </div>
 
-      {/* ======================================
-          USER ORDER TABS
-      ====================================== */}
-
-      <div className="mt-6 border-t border-baseBorderLight">
-        {/* TAB HEADER */}
-
-        <div className="flex items-center gap-4 px-3 border-b border-baseBorderLight overflow-x-auto">
-          <OrderTabButton
-            active={ordersTab === "open"}
-            onClick={() => setOrdersTab("open")}
-          >
-            Open Orders
-            {openOrders.length > 0 && (
-              <span className="ml-1 text-[10px] bg-baseBackgroundL3 px-1.5 py-0.5 rounded">
-                {openOrders.length}
-              </span>
-            )}
-          </OrderTabButton>
-
-          <OrderTabButton
-            active={ordersTab === "history"}
-            onClick={() => {
-              setOrdersTab("history");
-              // fetchOrderHistory();
-            }}
-          >
-            Order History
-          </OrderTabButton>
-
-          <OrderTabButton
-            active={ordersTab === "trades"}
-            onClick={() => {
-              setOrdersTab("trades");
-              fetchMyTrades();
-            }}
-          >
-            My Trades
-          </OrderTabButton>
-        </div>
-
-        {/* ======================================
-            OPEN ORDERS
-        ====================================== */}
-
-        {ordersTab === "open" && (
-          <div className="px-3 py-3">
-            {ordersLoading ? (
-              <p className="text-xs text-baseTextMedEmphasis">
-                Loading orders...
-              </p>
-            ) : openOrders.length === 0 ? (
-              <EmptyState text="No open orders" />
-            ) : (
-              <>
-                <div className="grid grid-cols-6 gap-2 text-[11px] text-baseTextMedEmphasis pb-2">
-                  <span>Side</span>
-                  <span>Price</span>
-                  <span>Quantity</span>
-                  <span>Filled</span>
-                  <span>Remaining</span>
-                  <span className="text-right">Action</span>
-                </div>
-
-                <div>
-                  {openOrders.map((order) => {
-                    const remaining =
-                      Number(order.quantity) - Number(order.filled);
-
-                    return (
-                      <div
-                        key={order.orderId}
-                        className="grid grid-cols-6 gap-2 items-center border-t border-baseBorderLight py-2 text-xs"
-                      >
-                        <span
-                          className={
-                            order.side === "buy"
-                              ? "text-greenText"
-                              : "text-redText"
-                          }
-                        >
-                          {order.side.toUpperCase()}
-                        </span>
-
-                        <span>{order.price}</span>
-
-                        <span>{order.quantity}</span>
-
-                        <span>{order.filled}</span>
-
-                        <span>{remaining}</span>
-
-                        <div className="flex justify-end">
-                          <button
-                            disabled={cancelingOrderId === order.orderId}
-                            onClick={() => handleCancelOrder(order.orderId)}
-                            className="px-3 py-1 rounded bg-baseBackgroundL2 hover:bg-baseBackgroundL3 text-xs disabled:opacity-50"
-                          >
-                            {cancelingOrderId === order.orderId
-                              ? "Cancelling..."
-                              : "Cancel"}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ======================================
-            ORDER HISTORY
-        ====================================== */}
-        {ordersTab === "history" && (
-          <div className="px-3 py-3">
-            {historyLoading ? (
-              <p className="text-xs text-baseTextMedEmphasis">
-                Loading history...
-              </p>
-            ) : orderHistory.length === 0 ? (
-              <EmptyState text="No order history" />
-            ) : (
-              <>
-                {/* FIXED HEADER */}
-                <div className="grid grid-cols-[55px_1fr_70px_90px] items-center gap-2 px-1 pb-2 text-[11px] text-baseTextMedEmphasis">
-                  <span>Side</span>
-                  <span>Price</span>
-                  <span>Filled</span>
-                  <span>Status</span>
-                </div>
-
-                {/* ONLY ROWS SCROLL */}
-                <div
-                  className="
-            h-[240px]
-            overflow-y-auto
-            overflow-x-hidden
-            pr-2
-            [scrollbar-width:thin]
-            [scrollbar-color:#4b5563_transparent]
-          "
-                >
-                  <div className="pb-4">
-                    {orderHistory.map((order) => (
-                      <div
-                        key={order.orderId}
-                        className="
-                  grid
-                  grid-cols-[55px_1fr_70px_90px]
-                  items-center
-                  gap-2
-                  border-t
-                  border-baseBorderLight
-                  px-1
-                  py-2.5
-                  text-xs
-                "
-                      >
-                        <span
-                          className={
-                            order.side === "buy"
-                              ? "text-greenText font-medium"
-                              : "text-redText font-medium"
-                          }
-                        >
-                          {order.side.toUpperCase()}
-                        </span>
-
-                        <span className="font-medium">
-                          {Number(order.price).toFixed(2)}
-                        </span>
-
-                        <span className="text-center">
-                          {Number(order.filled)}/{Number(order.quantity)}
-                        </span>
-
-                        <OrderStatusBadge status={order.status} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ======================================
-            MY TRADES
-        ====================================== */}
-        {ordersTab === "trades" && (
-          <div className="px-3 py-3">
-            {myTradesLoading ? (
-              <p className="text-xs text-baseTextMedEmphasis">
-                Loading trades...
-              </p>
-            ) : myTrades.length === 0 ? (
-              <EmptyState text="No trades yet" />
-            ) : (
-              <>
-                {/* HEADER */}
-                <div className="grid grid-cols-[48px_70px_55px_70px_1fr] items-center gap-2 px-1 pb-2 text-[11px] text-baseTextMedEmphasis">
-                  <span>Side</span>
-                  <span>Price</span>
-                  <span>Qty</span>
-                  <span>Value</span>
-                  <span>Time</span>
-                </div>
-
-                {/* SCROLLABLE ROWS */}
-                <div
-                  className="
-            h-[240px]
-            overflow-y-auto
-            overflow-x-hidden
-            pr-2
-            [scrollbar-width:thin]
-            [scrollbar-color:#4b5563_transparent]
-          "
-                >
-                  <div className="pb-4">
-                    {myTrades.map((trade) => {
-                      const value =
-                        Number(trade.price) * Number(trade.quantity);
-
-                      return (
-                        <div
-                          key={trade.tradeId}
-                          className="
-                    grid
-                    grid-cols-[48px_70px_55px_70px_1fr]
-                    items-center
-                    gap-2
-                    border-t
-                    border-baseBorderLight
-                    px-1
-                    py-2.5
-                    text-xs
-                    hover:bg-baseBackgroundL2
-                  "
-                        >
-                          {/* SIDE */}
-                          <span
-                            className={
-                              trade.side === "buy"
-                                ? "text-greenText font-semibold"
-                                : "text-redText font-semibold"
-                            }
-                          >
-                            {trade.side.toUpperCase()}
-                          </span>
-
-                          {/* PRICE */}
-                          <span className="font-medium">
-                            {Number(trade.price).toFixed(2)}
-                          </span>
-
-                          {/* QUANTITY */}
-                          <span>{Number(trade.quantity)}</span>
-
-                          {/* VALUE */}
-                          <span className="text-baseTextMedEmphasis">
-                            {value.toFixed(2)}
-                          </span>
-
-                          {/* TIME */}
-                          <span className="text-right text-[11px] text-baseTextMedEmphasis whitespace-nowrap">
-                            {trade.createdAt
-                              ? new Date(trade.createdAt).toLocaleTimeString(
-                                  [],
-                                  {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                    second: "2-digit",
-                                  },
-                                )
-                              : "-"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+      {ordersPortalTarget && createPortal(userOrdersPanel, ordersPortalTarget)}
+    </>
   );
 }
 

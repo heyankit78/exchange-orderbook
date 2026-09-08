@@ -46,7 +46,7 @@ export type WsMessage = {
     | {
         e: "order_update";
         orderId: string;
-        filled: string;
+        filled: number;
         status: "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
       }
     | {

@@ -1,4 +1,5 @@
 "use client";
+
 import { MarketBar } from "@/app/components/MarketBar";
 import { SwapUI } from "@/app/components/SwapUI";
 import { TradeView } from "@/app/components/TradeView";
@@ -6,23 +7,45 @@ import { Depth } from "@/app/components/depth/Depth";
 import { useParams } from "next/navigation";
 
 export default function Page() {
-    const { market } = useParams();
-    return <div className="flex flex-row flex-1">
-        <div className="flex flex-col flex-1">
-            <MarketBar market={market as string} />
-            <div className="flex flex-row h-[920px] border-y border-baseBorderLight">
-                <div className="flex flex-col flex-1">
-                    <TradeView market={market as string} />
-                </div>
-                <div className="flex flex-col w-[250px] overflow-hidden border-l border-baseBorderLight">
-                    <Depth market={market as string} /> 
-                </div>
-            </div>
-        </div>
-        <div className="flex flex-col border-l border-baseBorderLight">
-            <div className="flex flex-col w-[350px]">
-                <SwapUI market={market as string} />
-            </div>
-        </div>
+  const { market } = useParams();
+
+  return (
+    <div className="h-[calc(100vh-56px)] w-full overflow-hidden bg-baseBackgroundL1 text-white">
+      {/* MARKET HEADER */}
+      <MarketBar market={market as string} />
+
+      {/* MAIN WORKSPACE */}
+      <div className="grid h-[calc(100%-61px)] grid-cols-[minmax(0,1fr)_330px]">
+        {/* LEFT SIDE */}
+        <main className="grid min-w-0 grid-rows-[minmax(0,1fr)_280px] overflow-hidden border-r border-baseBorderLight">
+          {/* CHART + ORDER BOOK */}
+          <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_290px]">
+            {/* CHART */}
+            <section className="min-w-0 overflow-hidden border-r border-baseBorderLight">
+              <TradeView market={market as string} />
+            </section>
+
+            {/* ORDER BOOK */}
+            <section className="min-w-0 overflow-hidden">
+              <Depth market={market as string} />
+            </section>
+          </div>
+
+          {/* USER ORDERS WILL BE PORTALED HERE */}
+          <section
+            id="user-orders-panel"
+            className="min-h-0 overflow-hidden border-t border-baseBorderLight bg-baseBackgroundL1"
+          />
+        </main>
+
+        {/* RIGHT SIDE — ONLY ORDER ENTRY */}
+        <aside className="h-full min-w-0 overflow-hidden bg-baseBackgroundL1">
+          <SwapUI
+            market={market as string}
+            ordersPortalId="user-orders-panel"
+          />
+        </aside>
+      </div>
     </div>
+  );
 }
