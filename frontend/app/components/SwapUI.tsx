@@ -114,6 +114,8 @@ export function SwapUI({
 
       const data = await getMyTrades(market, session.accessToken);
 
+      console.log("📦 ORDER HISTORY API:", data);
+
       setMyTrades(data);
     } catch (error) {
       console.error("Failed to fetch my trades:", error);
@@ -153,6 +155,8 @@ export function SwapUI({
       setHistoryLoading(true);
 
       const data = await getOrderHistory(market, session.accessToken);
+
+      console.log("📦 ORDER HISTORY API:", data);
       setOrderHistory((prev) => {
         const localOrders = new Map(
           prev.map((order) => [order.orderId, order]),

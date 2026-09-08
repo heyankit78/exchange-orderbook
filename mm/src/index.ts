@@ -1,49 +1,68 @@
 import axios from "axios";
 
 const BASE_URL = "http://localhost:3000";
+
 const TOTAL_BIDS = 15;
 const TOTAL_ASKS = 15;
+
 const MARKET = "TATA_INR";
 
 const MM_EMAIL = "mm@test.com";
 const MM_PASSWORD = "password123";
 
-async function loginMarketMaker() {
+const TAKER_EMAIL = "taker@test.com";
+const TAKER_PASSWORD = "password123";
+
+async function login(email: string, password: string) {
   const response = await axios.post(`${BASE_URL}/api/v1/auth/login`, {
-    email: MM_EMAIL,
-    password: MM_PASSWORD,
+    email,
+    password,
   });
 
   return response.data.token;
 }
 
-async function main(token: string) {
+async function main(mmToken: string, takerToken: string) {
   const price = 1000 + Math.random() * 10;
 
-  const openOrders = await axios.get(
+  // -----------------------------
+  // GET MM OPEN ORDERS
+  // -----------------------------
+
+  const openOrdersResponse = await axios.get(
     `${BASE_URL}/api/v1/order/open?market=${MARKET}`,
     {
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${mmToken}`,
       },
     },
   );
 
-  const totalBids = openOrders.data.filter((o: any) => o.side === "buy").length;
+  const openOrders = openOrdersResponse.data;
 
-  const totalAsks = openOrders.data.filter(
-    (o: any) => o.side === "sell",
-  ).length;
+  const totalBids = openOrders.filter((o: any) => o.side === "buy").length;
 
-  const cancelledBids = await cancelBidsMoreThan(openOrders.data, price, token);
+  const totalAsks = openOrders.filter((o: any) => o.side === "sell").length;
 
-  const cancelledAsks = await cancelAsksLessThan(openOrders.data, price, token);
+  // -----------------------------
+  // CANCEL STALE ORDERS
+  // -----------------------------
+
+  const cancelledBids = await cancelBidsMoreThan(openOrders, price, mmToken);
+
+  const cancelledAsks = await cancelAsksLessThan(openOrders, price, mmToken);
 
   const remainingBids = totalBids - cancelledBids;
+
   const remainingAsks = totalAsks - cancelledAsks;
 
   let bidsToAdd = TOTAL_BIDS - remainingBids;
+
   let asksToAdd = TOTAL_ASKS - remainingAsks;
+
+  // -----------------------------
+  // REPLENISH ORDER BOOK
+  // -----------------------------
 
   while (bidsToAdd > 0 || asksToAdd > 0) {
     if (bidsToAdd > 0) {
@@ -57,7 +76,7 @@ async function main(token: string) {
         },
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${mmToken}`,
           },
         },
       );
@@ -76,7 +95,7 @@ async function main(token: string) {
         },
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${mmToken}`,
           },
         },
       );
@@ -85,9 +104,100 @@ async function main(token: string) {
     }
   }
 
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  // -----------------------------
+  // OCCASIONALLY CREATE A TRADE
+  // -----------------------------
 
-  await main(token);
+  if (Math.random() < 0.3) {
+    const refreshedOrdersResponse = await axios.get(
+      `${BASE_URL}/api/v1/order/open?market=${MARKET}`,
+      {
+        headers: {
+          Authorization: `Bearer ${mmToken}`,
+        },
+      },
+    );
+
+    await generateTrade(refreshedOrdersResponse.data, takerToken);
+  }
+
+  // -----------------------------
+  // WAIT
+  // -----------------------------
+
+  await sleep(1000);
+
+  await main(mmToken, takerToken);
+}
+
+async function generateTrade(openOrders: any[], takerToken: string) {
+  const bids = openOrders
+    .filter((o: any) => o.side === "buy")
+    .sort((a: any, b: any) => Number(b.price) - Number(a.price));
+
+  const asks = openOrders
+    .filter((o: any) => o.side === "sell")
+    .sort((a: any, b: any) => Number(a.price) - Number(b.price));
+
+  const bestBid = bids[0];
+  const bestAsk = asks[0];
+
+  if (!bestBid || !bestAsk) {
+    console.log("⚠️ No bid/ask available for trade");
+
+    return;
+  }
+
+  // 50/50:
+  // aggressive BUY or aggressive SELL
+
+  if (Math.random() < 0.5) {
+    // -----------------------------
+    // TAKER BUY
+    // -----------------------------
+    // Buy exactly at best ask.
+    // This should match the MM sell.
+
+    await axios.post(
+      `${BASE_URL}/api/v1/order`,
+      {
+        market: MARKET,
+        price: String(bestAsk.price),
+        quantity: "1",
+        side: "buy",
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${takerToken}`,
+        },
+      },
+    );
+
+    console.log("🔥 TAKER BUY @", bestAsk.price);
+  } else {
+    // -----------------------------
+    // TAKER SELL
+    // -----------------------------
+    // Sell exactly at best bid.
+    // This should match the MM buy.
+
+    await axios.post(
+      `${BASE_URL}/api/v1/order`,
+      {
+        market: MARKET,
+        price: String(bestBid.price),
+        quantity: "1",
+        side: "sell",
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${takerToken}`,
+        },
+      },
+    );
+
+    console.log("🔥 TAKER SELL @", bestBid.price);
+  }
 }
 
 async function cancelBidsMoreThan(
@@ -146,14 +256,22 @@ async function cancelAsksLessThan(
   return promises.length;
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function start() {
-  const token = await loginMarketMaker();
+  const mmToken = await login(MM_EMAIL, MM_PASSWORD);
 
-  console.log("Market maker logged in");
+  console.log("✅ Market maker logged in");
 
-  await main(token);
+  const takerToken = await login(TAKER_EMAIL, TAKER_PASSWORD);
+
+  console.log("✅ Taker bot logged in");
+
+  await main(mmToken, takerToken);
 }
 
 start().catch((error) => {
-  console.error("MM crashed:", error);
+  console.error("❌ MM crashed:", error?.response?.data || error);
 });

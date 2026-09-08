@@ -104,6 +104,40 @@ klineRouter.get("/", async (req, res) => {
           AND bucket <= $3
         ORDER BY bucket ASC
       `;
+    case "5m":
+      query = `
+    SELECT
+      bucket,
+      open,
+      high,
+      low,
+      close,
+      volume,
+      market
+    FROM klines_5m
+    WHERE market = $1
+      AND bucket >= $2
+      AND bucket <= $3
+    ORDER BY bucket ASC
+  `;
+      break;
+
+    case "15m":
+      query = `
+    SELECT
+      bucket,
+      open,
+      high,
+      low,
+      close,
+      volume,
+      market
+    FROM klines_15m
+    WHERE market = $1
+      AND bucket >= $2
+      AND bucket <= $3
+    ORDER BY bucket ASC
+  `;
       break;
 
     default:
