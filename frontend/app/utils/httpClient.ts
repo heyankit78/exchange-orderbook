@@ -1,5 +1,6 @@
 import axios from "axios";
 import { Balances, Depth, KLine, Ticker, Trade, OpenOrder } from "./types";
+import { signOut } from "next-auth/react";
 
 const BASE_URL = "http://localhost:3000/api/v1";
 
@@ -13,14 +14,12 @@ const api = axios.create({
 */
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+
+  async (error) => {
     if (error.response?.status === 401) {
-      if (
-        typeof window !== "undefined" &&
-        window.location.pathname !== "/login"
-      ) {
-        window.location.href = "/login";
-      }
+      await signOut({
+        callbackUrl: "/login",
+      });
     }
 
     return Promise.reject(error);
