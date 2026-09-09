@@ -261,10 +261,10 @@ export function SwapUI({
         status,
       };
 
-      setOrderHistory((prev) => [
-        newOrder,
-        ...prev.filter((order) => order.orderId !== response.orderId),
-      ]);
+      // setOrderHistory((prev) => [
+      //   newOrder,
+      //   ...prev.filter((order) => order.orderId !== response.orderId),
+      // ]);
 
       await Promise.all([fetchBalance(), fetchOpenOrders()]);
 
@@ -320,7 +320,7 @@ export function SwapUI({
         status: OrderHistoryItem["status"];
       }) => {
         setOpenOrders((prev) => {
-          if (update.status === "FILLED") {
+          if (update.status === "FILLED" || update.status === "CANCELLED") {
             return prev.filter((order) => order.orderId !== update.orderId);
           }
 
@@ -333,18 +333,20 @@ export function SwapUI({
               : order,
           );
         });
-
-        setOrderHistory((prev) =>
-          prev.map((order) =>
-            order.orderId === update.orderId
-              ? {
-                  ...order,
-                  filled: update.filled,
-                  status: update.status,
-                }
-              : order,
-          ),
-        );
+        if (update.status === "FILLED" || update.status === "CANCELLED") {
+          fetchOrderHistory();
+        }
+        // setOrderHistory((prev) =>
+        //   prev.map((order) =>
+        //     order.orderId === update.orderId
+        //       ? {
+        //           ...order,
+        //           filled: update.filled,
+        //           status: update.status,
+        //         }
+        //       : order,
+        //   ),
+        // );
       },
       `OPEN-ORDER-${userId}`,
     );
@@ -383,10 +385,7 @@ export function SwapUI({
       await Promise.all([
         fetchBalance(),
         fetchOpenOrders(),
-
-        // IMPORTANT:
-        // refresh history so OPEN becomes CANCELLED
-        // fetchOrderHistory(),
+        fetchOrderHistory(),
       ]);
     } catch (error) {
       console.error("Cancel order failed:", error);

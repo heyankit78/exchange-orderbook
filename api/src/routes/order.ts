@@ -120,6 +120,7 @@ orderRouter.get("/history", async (req: AuthRequest, res) => {
         updated_at
       FROM orders
       WHERE user_id = $1
+       AND order_status IN ('FILLED', 'CANCELLED')
     `;
 
     const values: unknown[] = [Number(userId)];
