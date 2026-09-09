@@ -6,84 +6,95 @@ import {
   UTCTimestamp,
 } from "lightweight-charts";
 
+type CandleUpdate = {
+  time: number; // milliseconds
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+};
+
 export class ChartManager {
   private candleSeries: ISeriesApi<"Candlestick">;
-  private lastUpdateTime: number = 0;
   private chart: any;
-  private currentBar: {
-    open: number | null;
-    high: number | null;
-    low: number | null;
-    close: number | null;
-  } = {
-    open: null,
-    high: null,
-    low: null,
-    close: null,
-  };
 
   constructor(
     ref: any,
     initialData: any[],
-    layout: { background: string; color: string }
+    layout: {
+      background: string;
+      color: string;
+    },
   ) {
     const chart = createLightWeightChart(ref, {
       autoSize: true,
+
       overlayPriceScales: {
         ticksVisible: true,
         borderVisible: true,
       },
+
       crosshair: {
         mode: CrosshairMode.Normal,
       },
+
       rightPriceScale: {
         visible: true,
         ticksVisible: true,
         entireTextOnly: true,
       },
+
       grid: {
         horzLines: {
           visible: false,
         },
+
         vertLines: {
           visible: false,
         },
       },
+
       layout: {
         background: {
           type: ColorType.Solid,
           color: layout.background,
         },
-        textColor: "white",
+
+        textColor: layout.color,
       },
     });
+
     this.chart = chart;
+
     this.candleSeries = chart.addCandlestickSeries();
 
     this.candleSeries.setData(
       initialData.map((data) => ({
-        ...data,
-        time: (data.timestamp / 1000) as UTCTimestamp,
-      }))
+        time: Math.floor(
+          new Date(data.timestamp).getTime() / 1000,
+        ) as UTCTimestamp,
+
+        open: data.open,
+        high: data.high,
+        low: data.low,
+        close: data.close,
+      })),
     );
-  }
-  public update(updatedPrice: any) {
-    if (!this.lastUpdateTime) {
-      this.lastUpdateTime = new Date().getTime();
-    }
 
+    chart.timeScale().fitContent();
+  }
+
+  public update(candle: CandleUpdate) {
     this.candleSeries.update({
-      time: (this.lastUpdateTime / 1000) as UTCTimestamp,
-      close: updatedPrice.close,
-      low: updatedPrice.low,
-      high: updatedPrice.high,
-      open: updatedPrice.open,
-    });
+      time: Math.floor(candle.time / 1000) as UTCTimestamp,
 
-    if (updatedPrice.newCandleInitiated) {
-      this.lastUpdateTime = updatedPrice.time;
-    }
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
+    });
   }
+
   public destroy() {
     this.chart.remove();
   }
