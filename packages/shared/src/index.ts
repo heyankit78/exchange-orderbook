@@ -3,3 +3,4 @@ export * from "./engine";
 export * from "./api";
 export * from "./db";
 export * from "./ws";
+export * from "./markets";

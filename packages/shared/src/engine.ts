@@ -29,8 +29,9 @@ export type MessageToEngine =
   | {
       type: typeof ON_RAMP;
       data: {
-        amount: string;
         userId: string;
+        asset: string;
+        amount: string;
         txnId: string;
       };
     }

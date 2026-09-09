@@ -13,9 +13,12 @@
   "license": "ISC",
   "dependencies": {
     "@repo/shared": "*",
-    "axios": "^1.7.2"
+    "axios": "^1.7.2",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
+    "@types/node": "^26.5.0",
+    "@types/pg": "^8.23.1",
     "typescript": "^7.0.2"
   }
 }

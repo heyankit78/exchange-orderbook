@@ -26,6 +26,21 @@ export type MessageToApi =
       };
     }
   | {
+      type: "ON_RAMP_SUCCESS";
+      payload: {
+        userId: string;
+        asset: string;
+        amount: string;
+        timestamp?: number;
+      };
+    }
+  | {
+      type: "ON_RAMP_FAILED";
+      payload: {
+        error: string;
+      };
+    }
+  | {
       type: "BALANCE";
       payload: UserBalance;
     }

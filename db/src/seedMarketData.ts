@@ -1,3 +1,4 @@
+import { MARKETS } from "@repo/shared";
 import { Client } from "pg";
 
 const client = new Client({
@@ -8,18 +9,19 @@ const client = new Client({
   port: 5432,
 });
 
-const MARKET = "TATA_INR";
+// --------------------------------------------------
+// CONFIG
+// --------------------------------------------------
 
-/**
- * Change this only when you intentionally want
- * to generate a NEW historical seed.
- */
-const SEED_KEY = "TATA_INR_7D_1M_V1";
+const MARKET_CONFIGS = Object.values(MARKETS);
 
 const DAYS = 7;
-const INTERVAL_MS = 60 * 1000; // 1 minute
 
-const START_PRICE = 1000;
+const MINUTE_MS = 60 * 1000;
+
+const TICKS_PER_MINUTE = 5;
+
+const SEED_VERSION = "V2";
 
 type SeedRow = {
   time: Date;
@@ -27,13 +29,10 @@ type SeedRow = {
   volume: number;
 };
 
-/**
- * Deterministic pseudo-random generator.
- *
- * Same seed:
- * → same random sequence
- * → same historical chart every time.
- */
+// --------------------------------------------------
+// DETERMINISTIC RANDOM
+// --------------------------------------------------
+
 function createRandom(seed: number) {
   let value = seed;
 
@@ -44,40 +43,21 @@ function createRandom(seed: number) {
   };
 }
 
-async function seed() {
-  await client.connect();
+// --------------------------------------------------
+// SEED ONE MARKET
+// --------------------------------------------------
+async function seedMarket(
+  config: (typeof MARKET_CONFIGS)[number],
+  seedNumber: number,
+) {
+  const seedKey = `${config.symbol}_${DAYS}D_MULTI_TICK_${SEED_VERSION}`;
 
-  try {
-    // --------------------------------------------------
-    // 1. CREATE SEED MARKER TABLE
-    // --------------------------------------------------
+  // ----------------------------------------------
+  // TRY TO CLAIM SEED
+  // ----------------------------------------------
 
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS market_data_seed_runs (
-        seed_key VARCHAR(120) PRIMARY KEY,
-        market VARCHAR(30) NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
-    // --------------------------------------------------
-    // 2. START TRANSACTION
-    // --------------------------------------------------
-
-    await client.query("BEGIN");
-
-    /**
-     * Try to claim this seed.
-     *
-     * First execution:
-     * → row inserted
-     *
-     * Second execution:
-     * → ON CONFLICT
-     * → nothing inserted
-     */
-    const markerResult = await client.query(
-      `
+  const markerResult = await client.query(
+    `
         INSERT INTO market_data_seed_runs (
           seed_key,
           market
@@ -89,114 +69,94 @@ async function seed() {
 
         RETURNING seed_key
       `,
-      [SEED_KEY, MARKET],
-    );
+    [seedKey, config.symbol],
+  );
 
-    // --------------------------------------------------
-    // ALREADY SEEDED
-    // --------------------------------------------------
+  if (markerResult.rows.length === 0) {
+    console.log(`ℹ️ ${config.symbol} already seeded`);
 
-    if (markerResult.rows.length === 0) {
-      await client.query("ROLLBACK");
+    return;
+  }
 
-      console.log(`ℹ️ Seed "${SEED_KEY}" already exists.`);
+  // ----------------------------------------------
+  // TIME RANGE
+  // ----------------------------------------------
 
-      console.log("No historical market data was inserted.");
+  const now = new Date();
 
-      await client.end();
+  now.setSeconds(0, 0);
 
-      return;
-    }
+  const endTime = now.getTime();
 
-    // --------------------------------------------------
-    // 3. CREATE DETERMINISTIC TIME RANGE
-    // --------------------------------------------------
+  const startTime = endTime - DAYS * 24 * 60 * 60 * 1000;
 
-    /**
-     * Important:
-     *
-     * We don't use Date.now() directly.
-     *
-     * Instead, round current time to the beginning
-     * of the current minute.
-     *
-     * Example:
-     *
-     * 21:43:37
-     *
-     * becomes
-     *
-     * 21:43:00
-     */
+  // ----------------------------------------------
+  // RANDOM GENERATOR
+  // ----------------------------------------------
 
-    const now = new Date();
+  const random = createRandom(seedNumber);
 
-    now.setSeconds(0, 0);
+  let currentPrice: number = config.startPrice;
 
-    const endTime = now.getTime();
+  const rows: SeedRow[] = [];
 
-    const startTime = endTime - DAYS * 24 * 60 * 60 * 1000;
+  // ----------------------------------------------
+  // GENERATE TICKS
+  // ----------------------------------------------
 
-    // --------------------------------------------------
-    // 4. DETERMINISTIC RANDOM WALK
-    // --------------------------------------------------
+  for (
+    let minuteStart = startTime;
+    minuteStart < endTime;
+    minuteStart += MINUTE_MS
+  ) {
+    const minuteTrend = (random() - 0.5) * config.minuteVolatility;
 
-    const random = createRandom(123456);
+    for (let tick = 0; tick < TICKS_PER_MINUTE; tick++) {
+      const tickOffset = Math.floor((tick / TICKS_PER_MINUTE) * MINUTE_MS);
 
-    let currentPrice = START_PRICE;
+      const timestamp = minuteStart + tickOffset;
 
-    const rows: SeedRow[] = [];
+      const noise = (random() - 0.5) * config.tickVolatility;
 
-    for (
-      let timestamp = startTime;
-      timestamp < endTime;
-      timestamp += INTERVAL_MS
-    ) {
-      /**
-       * Price movement between roughly
-       * -2 and +2
-       */
-      const movement = (random() - 0.5) * 4;
+      currentPrice += minuteTrend / TICKS_PER_MINUTE + noise;
 
-      currentPrice += movement;
+      currentPrice = Math.max(
+        config.minPrice,
+        Math.min(config.maxPrice, currentPrice),
+      );
 
-      /**
-       * Keep demo price within sensible range.
-       */
-      currentPrice = Math.max(950, Math.min(1050, currentPrice));
-
-      const volume = 0.5 + random() * 5;
+      const volume =
+        config.minVolume + random() * (config.maxVolume - config.minVolume);
 
       rows.push({
         time: new Date(timestamp),
+
         price: Number(currentPrice.toFixed(2)),
-        volume: Number(volume.toFixed(4)),
+
+        volume: Number(volume.toFixed(6)),
       });
     }
+  }
 
-    console.log(`📊 Generated ${rows.length} historical market points`);
+  console.log(`📊 ${config.symbol}: generated ${rows.length} ticks`);
 
-    console.log(`📅 From ${new Date(startTime).toISOString()}`);
+  // ----------------------------------------------
+  // INSERT
+  // ----------------------------------------------
 
-    console.log(`📅 To   ${new Date(endTime).toISOString()}`);
+  const BATCH_SIZE = 500;
 
-    // --------------------------------------------------
-    // 5. INSERT IN BATCHES
-    // --------------------------------------------------
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
 
-    const BATCH_SIZE = 500;
+    const values: unknown[] = [];
 
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = rows.slice(i, i + BATCH_SIZE);
+    const placeholders = batch.map((row, index) => {
+      const offset = index * 4;
 
-      const values: unknown[] = [];
+      values.push(row.time, row.price, row.volume, config.symbol);
 
-      const placeholders = batch.map((row, index) => {
-        const offset = index * 4;
-
-        values.push(row.time, row.price, row.volume, MARKET);
-
-        return `
+      return `
             (
               $${offset + 1},
               $${offset + 2},
@@ -204,50 +164,67 @@ async function seed() {
               $${offset + 4}
             )
           `;
-      });
+    });
 
-      await client.query(
-        `
-          INSERT INTO market_prices (
-            time,
-            price,
-            volume,
-            market
-          )
-          VALUES
-          ${placeholders.join(",")}
-        `,
-        values,
-      );
+    await client.query(
+      `
+        INSERT INTO market_prices (
+          time,
+          price,
+          volume,
+          market
+        )
+        VALUES
+        ${placeholders.join(",")}
+      `,
+      values,
+    );
+  }
 
-      console.log(
-        `Inserted ${Math.min(i + BATCH_SIZE, rows.length)}/${rows.length}`,
+  console.log(`✅ ${config.symbol} seeded`);
+}
+
+// --------------------------------------------------
+// MAIN
+// --------------------------------------------------
+
+async function seed() {
+  await client.connect();
+
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS market_data_seed_runs (
+        seed_key VARCHAR(120) PRIMARY KEY,
+        market VARCHAR(30) NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
       );
+    `);
+
+    await client.query("BEGIN");
+
+    /**
+     * Different deterministic seed
+     * for each market.
+     */
+    for (let i = 0; i < MARKET_CONFIGS.length; i++) {
+      await seedMarket(MARKET_CONFIGS[i], 123456 + i * 1000);
     }
 
-    // --------------------------------------------------
-    // 6. COMMIT
-    // --------------------------------------------------
-
     await client.query("COMMIT");
-
-    console.log(`✅ Historical seed "${SEED_KEY}" committed`);
-
-    // --------------------------------------------------
-    // 7. REFRESH CURRENT MATERIALIZED VIEWS
-    // --------------------------------------------------
 
     console.log("🔄 Refreshing kline views...");
 
     await client.query(`REFRESH MATERIALIZED VIEW klines_1m`);
 
+    await client.query(`REFRESH MATERIALIZED VIEW klines_5m`);
+
+    await client.query(`REFRESH MATERIALIZED VIEW klines_15m`);
+
     await client.query(`REFRESH MATERIALIZED VIEW klines_1h`);
 
     await client.query(`REFRESH MATERIALIZED VIEW klines_1w`);
 
-    console.log("✅ Kline views refreshed");
-
-    console.log("✅ Historical market data seeded successfully");
+    console.log("✅ All markets seeded");
   } catch (error) {
     try {
       await client.query("ROLLBACK");

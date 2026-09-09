@@ -8,6 +8,7 @@ import { tickersRouter } from "./routes/ticker";
 import { authRouter } from "./routes/auth";
 import { authenticate } from "./middleware/auth";
 import { balanceRouter } from "./routes/balance";
+import { devRouter } from "./routes/dev";
 
 const app = express();
 app.use(cors());
@@ -20,7 +21,8 @@ app.use("/api/v1/trades", tradesRouter);
 app.use("/api/v1/klines", klineRouter);
 app.use("/api/v1/tickers", tickersRouter);
 app.use("/api/v1/balance", authenticate, balanceRouter);
+app.use("/api/v1/dev", authenticate, devRouter);
 
 app.listen(3000, () => {
-    console.log("Server is running on port 3000");
+  console.log("Server is running on port 3000");
 });

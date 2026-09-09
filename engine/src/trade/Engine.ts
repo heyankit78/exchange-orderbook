@@ -70,11 +70,9 @@ export class Engine {
       );
     } else {
       this.orderbooks = [
-        new Orderbook("TATA", "INR", [], [], 0),
-        new Orderbook("BTC", "INR", [], [], 0),
-        new Orderbook("ETH", "INR", [], [], 0),
         new Orderbook("BTC", "USDC", [], [], 0),
         new Orderbook("ETH", "USDC", [], [], 0),
+        new Orderbook("SOL", "USDC", [], [], 0),
       ];
     }
 
@@ -263,10 +261,34 @@ export class Engine {
           console.error(e);
         }
         break;
-
       case ON_RAMP:
-        // Use void to fire-and-forget but still log errors
-        await this.onRamp(message.data.userId, Number(message.data.amount));
+        try {
+          await this.onRamp(
+            message.data.userId,
+            message.data.asset,
+            Number(message.data.amount),
+          );
+
+          RedisManager.getInstance().sendToApi(clientId, {
+            type: "ON_RAMP_SUCCESS",
+            payload: {
+              userId: message.data.userId,
+              asset: message.data.asset,
+              amount: message.data.amount,
+            },
+          });
+        } catch (error) {
+          const messageText =
+            error instanceof Error ? error.message : "On-ramp failed";
+
+          RedisManager.getInstance().sendToApi(clientId, {
+            type: "ON_RAMP_FAILED",
+            payload: {
+              error: messageText,
+            },
+          });
+        }
+
         break;
 
       case GET_DEPTH:
@@ -616,26 +638,26 @@ export class Engine {
     );
   }
 
-  async onRamp(userId: string, amount: number) {
-    const existing = this.balances.get(userId);
-    if (!existing) {
-      // Brand new user — set default balance
-      const newBal: UserBalance = {
-        INR: { available: amount, locked: 0 },
-        USDC: { available: DEFAULT_BALANCE.USDC.available, locked: 0 },
-        TATA: { available: DEFAULT_BALANCE.TATA.available, locked: 0 },
-        BTC: { available: DEFAULT_BALANCE.BTC.available, locked: 0 },
-        ETH: { available: DEFAULT_BALANCE.ETH.available, locked: 0 },
-      };
-      this.balances.set(userId, newBal);
-    } else {
-      // Existing user — just top up INR
-      if (!existing.INR) existing.INR = { available: 0, locked: 0 };
-      existing.INR.available += amount;
+  async onRamp(userId: string, asset: string, amount: number) {
+    let balance = this.balances.get(userId);
+
+    if (!balance) {
+      balance = {};
+      this.balances.set(userId, balance);
     }
-    // Persist to PostgreSQL — await so we're sure it saves
-    await this.persistAllBalances(userId);
-    console.log(`onRamp done for user ${userId} — persisted to DB`);
+
+    if (!balance[asset]) {
+      balance[asset] = {
+        available: 0,
+        locked: 0,
+      };
+    }
+
+    balance[asset].available += amount;
+
+    await this.persistBalance(userId, asset);
+
+    console.log(`✅ onRamp ${userId} +${amount} ${asset}`);
   }
 
   // ─── WS + DB publishing ────────────────────────────────────────

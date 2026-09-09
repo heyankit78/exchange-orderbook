@@ -47,6 +47,7 @@ authRouter.post("/register", async (req, res) => {
       type: ON_RAMP,
       data: {
         userId,
+        asset: "USDC",
         amount: "10000000",
         txnId: crypto.randomUUID(),
       },

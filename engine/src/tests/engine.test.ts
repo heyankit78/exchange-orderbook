@@ -1835,6 +1835,7 @@ describe("Engine", () => {
         type: ON_RAMP,
         data: {
           userId: "99",
+          asset: "INR",
           amount: "5000",
           txnId: "txn-test-1",
         },
@@ -1876,6 +1877,7 @@ describe("Engine", () => {
         type: ON_RAMP,
         data: {
           userId: "1",
+          asset: "INR",
           amount: "500",
           txnId: "txn-1",
         },
