@@ -9,19 +9,11 @@ const client = new Client({
   port: 5432,
 });
 
-// --------------------------------------------------
-// CONFIG
-// --------------------------------------------------
-
 const MARKET_CONFIGS = Object.values(MARKETS);
 
 const DAYS = 7;
-
 const MINUTE_MS = 60 * 1000;
-
 const TICKS_PER_MINUTE = 5;
-
-const SEED_VERSION = "V2";
 
 type SeedRow = {
   time: Date;
@@ -29,80 +21,31 @@ type SeedRow = {
   volume: number;
 };
 
-// --------------------------------------------------
-// DETERMINISTIC RANDOM
-// --------------------------------------------------
-
 function createRandom(seed: number) {
   let value = seed;
 
   return () => {
     value = (value * 16807) % 2147483647;
-
     return (value - 1) / 2147483646;
   };
 }
 
-// --------------------------------------------------
-// SEED ONE MARKET
-// --------------------------------------------------
 async function seedMarket(
   config: (typeof MARKET_CONFIGS)[number],
   seedNumber: number,
 ) {
-  const seedKey = `${config.symbol}_${DAYS}D_MULTI_TICK_${SEED_VERSION}`;
-
-  // ----------------------------------------------
-  // TRY TO CLAIM SEED
-  // ----------------------------------------------
-
-  const markerResult = await client.query(
-    `
-        INSERT INTO market_data_seed_runs (
-          seed_key,
-          market
-        )
-        VALUES ($1, $2)
-
-        ON CONFLICT (seed_key)
-        DO NOTHING
-
-        RETURNING seed_key
-      `,
-    [seedKey, config.symbol],
-  );
-
-  if (markerResult.rows.length === 0) {
-    console.log(`ℹ️ ${config.symbol} already seeded`);
-
-    return;
-  }
-
-  // ----------------------------------------------
-  // TIME RANGE
-  // ----------------------------------------------
+  const random = createRandom(seedNumber);
 
   const now = new Date();
-
   now.setSeconds(0, 0);
 
   const endTime = now.getTime();
 
   const startTime = endTime - DAYS * 24 * 60 * 60 * 1000;
 
-  // ----------------------------------------------
-  // RANDOM GENERATOR
-  // ----------------------------------------------
-
-  const random = createRandom(seedNumber);
-
   let currentPrice: number = config.startPrice;
 
   const rows: SeedRow[] = [];
-
-  // ----------------------------------------------
-  // GENERATE TICKS
-  // ----------------------------------------------
 
   for (
     let minuteStart = startTime;
@@ -131,7 +74,7 @@ async function seedMarket(
       rows.push({
         time: new Date(timestamp),
 
-        price: Number(currentPrice.toFixed(2)),
+        price: Number(currentPrice.toFixed(config.priceDecimals)),
 
         volume: Number(volume.toFixed(6)),
       });
@@ -139,10 +82,6 @@ async function seedMarket(
   }
 
   console.log(`📊 ${config.symbol}: generated ${rows.length} ticks`);
-
-  // ----------------------------------------------
-  // INSERT
-  // ----------------------------------------------
 
   const BATCH_SIZE = 500;
 
@@ -152,16 +91,17 @@ async function seedMarket(
     const values: unknown[] = [];
 
     const placeholders = batch.map((row, index) => {
-      const offset = index * 4;
+      const offset = index * 5;
 
-      values.push(row.time, row.price, row.volume, config.symbol);
+      values.push(row.time, row.price, row.volume, config.symbol, "seed");
 
       return `
             (
               $${offset + 1},
               $${offset + 2},
               $${offset + 3},
-              $${offset + 4}
+              $${offset + 4},
+              $${offset + 5}
             )
           `;
     });
@@ -172,7 +112,8 @@ async function seedMarket(
           time,
           price,
           volume,
-          market
+          market,
+          source
         )
         VALUES
         ${placeholders.join(",")}
@@ -184,33 +125,48 @@ async function seedMarket(
   console.log(`✅ ${config.symbol} seeded`);
 }
 
-// --------------------------------------------------
-// MAIN
-// --------------------------------------------------
-
 async function seed() {
   await client.connect();
 
   try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS market_data_seed_runs (
-        seed_key VARCHAR(120) PRIMARY KEY,
-        market VARCHAR(30) NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
     await client.query("BEGIN");
 
-    /**
-     * Different deterministic seed
-     * for each market.
-     */
+    // -----------------------------------------
+    // ENSURE SOURCE COLUMN EXISTS
+    // -----------------------------------------
+
+    await client.query(`
+      ALTER TABLE market_prices
+      ADD COLUMN IF NOT EXISTS source VARCHAR(20)
+      DEFAULT 'live'
+    `);
+
+    // -----------------------------------------
+    // REMOVE ONLY OLD GENERATED HISTORY
+    // -----------------------------------------
+
+    const deleted = await client.query(`
+        DELETE FROM market_prices
+        WHERE source = 'seed'
+      `);
+
+    console.log(`🧹 Removed ${deleted.rowCount ?? 0} old seeded rows`);
+
+    // -----------------------------------------
+    // CREATE FRESH HISTORY
+    // -----------------------------------------
+
     for (let i = 0; i < MARKET_CONFIGS.length; i++) {
       await seedMarket(MARKET_CONFIGS[i], 123456 + i * 1000);
     }
 
     await client.query("COMMIT");
+
+    console.log("✅ Fresh historical data committed");
+
+    // -----------------------------------------
+    // REFRESH KLINES
+    // -----------------------------------------
 
     console.log("🔄 Refreshing kline views...");
 
@@ -224,7 +180,7 @@ async function seed() {
 
     await client.query(`REFRESH MATERIALIZED VIEW klines_1w`);
 
-    console.log("✅ All markets seeded");
+    console.log("✅ All kline views refreshed");
   } catch (error) {
     try {
       await client.query("ROLLBACK");

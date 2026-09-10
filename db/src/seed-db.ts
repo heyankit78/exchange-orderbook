@@ -105,13 +105,20 @@ async function initializeDB() {
   console.log("trades table ready");
 
   await client.query(`
-    CREATE TABLE IF NOT EXISTS market_prices (
-      time TIMESTAMPTZ NOT NULL,
-      price DOUBLE PRECISION NOT NULL,
-      volume DOUBLE PRECISION NOT NULL,
-      market VARCHAR(20) NOT NULL
-    );
-  `);
+  CREATE TABLE IF NOT EXISTS market_prices (
+    time TIMESTAMPTZ NOT NULL,
+    price DOUBLE PRECISION NOT NULL,
+    volume DOUBLE PRECISION NOT NULL,
+    market VARCHAR(20) NOT NULL,
+    source VARCHAR(20) NOT NULL DEFAULT 'live'
+  );
+`);
+
+  await client.query(`
+  ALTER TABLE market_prices
+  ADD COLUMN IF NOT EXISTS source VARCHAR(20)
+  NOT NULL DEFAULT 'live';
+`);
 
   await client.query(`
     SELECT create_hypertable(

@@ -98,11 +98,18 @@ async function processDbMessage(data: DbMessage) {
     if ("cancelled" in orderData && orderData.cancelled) {
       await pgClient.query(
         `
-        UPDATE orders
-        SET order_status = 'CANCELLED',
-            updated_at = NOW()
-        WHERE order_id = $1
-        `,
+    UPDATE orders
+    SET
+      order_status = CASE
+        WHEN order_status = 'FILLED'
+          THEN 'FILLED'
+        ELSE 'CANCELLED'
+      END,
+
+      updated_at = NOW()
+
+    WHERE order_id = $1
+  `,
         [orderData.orderId],
       );
 
@@ -148,19 +155,54 @@ async function processDbMessage(data: DbMessage) {
 
       await pgClient.query(
         `
-        INSERT INTO orders (
-          order_id,
-          user_id,
-          market,
-          side,
-          price,
-          quantity,
-          filled,
-          order_status
-        )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-        ON CONFLICT (order_id) DO NOTHING
-        `,
+    INSERT INTO orders (
+      order_id,
+      user_id,
+      market,
+      side,
+      price,
+      quantity,
+      filled,
+      order_status
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+
+    ON CONFLICT (order_id)
+    DO UPDATE SET
+
+      filled =
+        GREATEST(
+          orders.filled,
+          EXCLUDED.filled
+        ),
+
+      order_status =
+        CASE
+
+          -- Never move a terminal order backwards
+          WHEN orders.order_status IN (
+            'FILLED',
+            'CANCELLED'
+          )
+          THEN orders.order_status
+
+          -- New information says it is fully filled
+          WHEN EXCLUDED.filled >= orders.quantity
+          THEN 'FILLED'
+
+          -- At least partially filled
+          WHEN GREATEST(
+            orders.filled,
+            EXCLUDED.filled
+          ) > 0
+          THEN 'PARTIALLY_FILLED'
+
+          ELSE 'OPEN'
+
+        END,
+
+      updated_at = NOW()
+  `,
         [orderId, userId, market, side, price, quantity, filled, status],
       );
 
