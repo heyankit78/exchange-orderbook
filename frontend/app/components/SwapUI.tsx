@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { createPortal } from "react-dom";
 import {
@@ -70,6 +70,8 @@ export function SwapUI({
   const [ordersPortalTarget, setOrdersPortalTarget] =
     useState<HTMLElement | null>(null);
 
+  const latestOrderStatusRef = useRef<Map<string, OrderStatus>>(new Map());
+
   useEffect(() => {
     if (!ordersPortalId) return;
 
@@ -136,7 +138,17 @@ export function SwapUI({
 
       const data = await getOpenOrders(market, session.accessToken);
 
-      setOpenOrders(data);
+      setOpenOrders(
+        data.filter((order) => {
+          const latestStatus = latestOrderStatusRef.current.get(order.orderId);
+
+          if (latestStatus === "FILLED" || latestStatus === "CANCELLED") {
+            return false;
+          }
+
+          return true;
+        }),
+      );
     } catch (error) {
       console.error("Failed to fetch open orders:", error);
     } finally {
@@ -319,6 +331,14 @@ export function SwapUI({
         filled: string;
         status: OrderHistoryItem["status"];
       }) => {
+        const currentStatus = latestOrderStatusRef.current.get(update.orderId);
+
+        if (
+          !currentStatus ||
+          orderStatusRank[update.status] >= orderStatusRank[currentStatus]
+        ) {
+          latestOrderStatusRef.current.set(update.orderId, update.status);
+        }
         setOpenOrders((prev) => {
           if (update.status === "FILLED" || update.status === "CANCELLED") {
             return prev.filter((order) => order.orderId !== update.orderId);
@@ -336,17 +356,6 @@ export function SwapUI({
         if (update.status === "FILLED" || update.status === "CANCELLED") {
           fetchOrderHistory();
         }
-        // setOrderHistory((prev) =>
-        //   prev.map((order) =>
-        //     order.orderId === update.orderId
-        //       ? {
-        //           ...order,
-        //           filled: update.filled,
-        //           status: update.status,
-        //         }
-        //       : order,
-        //   ),
-        // );
       },
       `OPEN-ORDER-${userId}`,
     );
