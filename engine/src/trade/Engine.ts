@@ -115,17 +115,22 @@ export class Engine {
   async persistBalance(userId: string, asset: string) {
     const bal = this.balances.get(userId)?.[asset];
     if (!bal) return;
-    try {
-      await this.pgClient.query(
-        `INSERT INTO balances (user_id, asset, available, locked, updated_at)
-                 VALUES ($1, $2, $3, $4, NOW())
-                 ON CONFLICT (user_id, asset)
-                 DO UPDATE SET available = EXCLUDED.available, locked = EXCLUDED.locked, updated_at = NOW()`,
-        [Number(userId), asset, bal.available, bal.locked],
-      );
-    } catch (e) {
-      console.error(`Failed to persist ${userId}/${asset}:`, e);
-    }
+    await this.pgClient.query(
+      `INSERT INTO balances (
+    user_id,
+    asset,
+    available,
+    locked,
+    updated_at
+  )
+  VALUES ($1, $2, $3, $4, NOW())
+  ON CONFLICT (user_id, asset)
+  DO UPDATE SET
+    available = EXCLUDED.available,
+    locked = EXCLUDED.locked,
+    updated_at = NOW()`,
+      [Number(userId), asset, bal.available, bal.locked],
+    );
   }
 
   async persistAllBalances(userId: string) {
@@ -399,7 +404,7 @@ export class Engine {
     if (existingInDb.rows.length > 0) {
       throw new Error("Order already processed");
     }
-    this.checkAndLockFunds(
+    await this.checkAndLockFunds(
       baseAsset,
       quoteAsset,
       side,
@@ -550,7 +555,7 @@ export class Engine {
       });
     });
   }
-  checkAndLockFunds(
+  async checkAndLockFunds(
     baseAsset: string,
     quoteAsset: string,
     side: "buy" | "sell",

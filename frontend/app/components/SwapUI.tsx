@@ -71,6 +71,7 @@ export function SwapUI({
     useState<HTMLElement | null>(null);
 
   const latestOrderStatusRef = useRef<Map<string, OrderStatus>>(new Map());
+  const openOrdersRef = useRef<OpenOrder[]>([]);
 
   useEffect(() => {
     if (!ordersPortalId) return;
@@ -170,12 +171,14 @@ export function SwapUI({
 
       console.log("📦 ORDER HISTORY API:", data);
       setOrderHistory((prev) => {
-        const localOrders = new Map(
-          prev.map((order) => [order.orderId, order]),
+        const serverOrders = new Map(
+          data.map((order: OrderHistoryItem) => [order.orderId, order]),
         );
 
-        return data.map((serverOrder: any) => {
-          const localOrder = localOrders.get(serverOrder.orderId);
+        const merged = data.map((serverOrder: OrderHistoryItem) => {
+          const localOrder = prev.find(
+            (order) => order.orderId === serverOrder.orderId,
+          );
 
           if (!localOrder) {
             return serverOrder;
@@ -185,14 +188,23 @@ export function SwapUI({
 
           const serverRank = orderStatusRank[serverOrder.status as OrderStatus];
 
-          // local WebSocket state is newer
           if (localRank > serverRank) {
             return localOrder;
           }
 
-          // server is same or newer
           return serverOrder;
         });
+
+        // Keep terminal orders learned from WS
+        // that PostgreSQL hasn't returned yet.
+        const localOnlyOrders = prev.filter(
+          (localOrder) =>
+            !serverOrders.has(localOrder.orderId) &&
+            (localOrder.status === "FILLED" ||
+              localOrder.status === "CANCELLED"),
+        );
+
+        return [...localOnlyOrders, ...merged];
       });
     } catch (error) {
       console.error("Failed to fetch order history:", error);
@@ -201,6 +213,9 @@ export function SwapUI({
     }
   };
 
+  useEffect(() => {
+    openOrdersRef.current = openOrders;
+  }, [openOrders]);
   // ----------------------------------------
   // PLACE ORDER
   // ----------------------------------------
@@ -333,12 +348,39 @@ export function SwapUI({
       }) => {
         const currentStatus = latestOrderStatusRef.current.get(update.orderId);
 
+        // Ignore stale WS events completely
         if (
-          !currentStatus ||
-          orderStatusRank[update.status] >= orderStatusRank[currentStatus]
+          currentStatus &&
+          orderStatusRank[update.status] < orderStatusRank[currentStatus]
         ) {
-          latestOrderStatusRef.current.set(update.orderId, update.status);
+          return;
         }
+
+        latestOrderStatusRef.current.set(update.orderId, update.status);
+
+        if (update.status === "FILLED" || update.status === "CANCELLED") {
+          const existingOrder = openOrdersRef.current.find(
+            (order) => order.orderId === update.orderId,
+          );
+
+          if (existingOrder) {
+            const historyOrder: OrderHistoryItem = {
+              orderId: existingOrder.orderId,
+              market,
+              side: existingOrder.side,
+              price: String(existingOrder.price),
+              quantity: String(existingOrder.quantity),
+              filled: String(update.filled),
+              status: update.status,
+            };
+
+            setOrderHistory((prev) => [
+              historyOrder,
+              ...prev.filter((order) => order.orderId !== update.orderId),
+            ]);
+          }
+        }
+
         setOpenOrders((prev) => {
           if (update.status === "FILLED" || update.status === "CANCELLED") {
             return prev.filter((order) => order.orderId !== update.orderId);
@@ -353,6 +395,7 @@ export function SwapUI({
               : order,
           );
         });
+
         if (update.status === "FILLED" || update.status === "CANCELLED") {
           fetchOrderHistory();
         }
@@ -380,17 +423,38 @@ export function SwapUI({
       setCancelingOrderId(orderId);
 
       await cancelOrder(orderId, market, session.accessToken);
-      setOrderHistory((prev) =>
-        prev.map((order) =>
-          order.orderId === orderId
-            ? {
-                ...order,
-                status: "CANCELLED",
-              }
-            : order,
-        ),
+
+      // Remember newest terminal status
+      latestOrderStatusRef.current.set(orderId, "CANCELLED");
+
+      // Find current full order before removing it
+      const existingOrder = openOrdersRef.current.find(
+        (order) => order.orderId === orderId,
       );
 
+      if (existingOrder) {
+        const historyOrder: OrderHistoryItem = {
+          orderId: existingOrder.orderId,
+          market,
+          side: existingOrder.side,
+          price: String(existingOrder.price),
+          quantity: String(existingOrder.quantity),
+          filled: String(existingOrder.filled),
+          status: "CANCELLED",
+        };
+
+        setOrderHistory((prev) => [
+          historyOrder,
+          ...prev.filter((order) => order.orderId !== orderId),
+        ]);
+      }
+
+      // Remove immediately from Open Orders
+      setOpenOrders((prev) =>
+        prev.filter((order) => order.orderId !== orderId),
+      );
+
+      // Server confirmation/reconciliation
       await Promise.all([
         fetchBalance(),
         fetchOpenOrders(),
