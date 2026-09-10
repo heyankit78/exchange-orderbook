@@ -133,12 +133,33 @@ export class Engine {
     );
   }
 
-  async persistAllBalances(userId: string) {
+  async persistAllBalances(userId: string, client: Client = this.pgClient) {
     const bal = this.balances.get(userId);
+
     if (!bal) return;
-    await Promise.all(
-      Object.keys(bal).map((asset) => this.persistBalance(userId, asset)),
-    );
+
+    for (const asset of Object.keys(bal)) {
+      const assetBalance = bal[asset];
+
+      await client.query(
+        `
+        INSERT INTO balances (
+          user_id,
+          asset,
+          available,
+          locked,
+          updated_at
+        )
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (user_id, asset)
+        DO UPDATE SET
+          available = EXCLUDED.available,
+          locked = EXCLUDED.locked,
+          updated_at = NOW()
+      `,
+        [Number(userId), asset, assetBalance.available, assetBalance.locked],
+      );
+    }
   }
 
   // ─── Snapshot ──────────────────────────────────────────────────
@@ -433,7 +454,7 @@ export class Engine {
       })),
     );
 
-    this.updateBalance(
+    await this.updateBalance(
       takerUserId,
       baseAsset,
       quoteAsset,
@@ -564,21 +585,51 @@ export class Engine {
     quantity: string,
   ) {
     const bal = this.balances.get(userId);
+
+    if (!bal) {
+      throw new Error("Balance not found");
+    }
+
     if (side === "buy") {
       const need = Number(quantity) * Number(price);
-      if ((bal?.[quoteAsset]?.available ?? 0) < need)
+
+      const quoteBalance = bal[quoteAsset];
+
+      if (!quoteBalance || quoteBalance.available < need) {
         throw new Error("Insufficient funds");
-      bal![quoteAsset].available -= need;
-      bal![quoteAsset].locked += need;
-      this.persistBalance(userId, quoteAsset).catch(console.error);
+      }
+
+      quoteBalance.available -= need;
+      quoteBalance.locked += need;
+
+      try {
+        await this.persistBalance(userId, quoteAsset);
+      } catch (error) {
+        quoteBalance.available += need;
+        quoteBalance.locked -= need;
+
+        throw error;
+      }
     } else {
       const need = Number(quantity);
-      if ((bal?.[baseAsset]?.available ?? 0) < need)
+
+      const baseBalance = bal[baseAsset];
+
+      if (!baseBalance || baseBalance.available < need) {
         throw new Error("Insufficient funds");
-      bal![baseAsset].available -= need;
-      bal![baseAsset].locked += need;
-      // BUG FIX: was persisting quoteAsset here — should be baseAsset
-      this.persistBalance(userId, baseAsset).catch(console.error);
+      }
+
+      baseBalance.available -= need;
+      baseBalance.locked += need;
+
+      try {
+        await this.persistBalance(userId, baseAsset);
+      } catch (error) {
+        baseBalance.available += need;
+        baseBalance.locked -= need;
+
+        throw error;
+      }
     }
   }
 
@@ -638,9 +689,18 @@ export class Engine {
       });
     }
 
-    affectedUsers.forEach((uid) =>
-      this.persistAllBalances(uid).catch(console.error),
-    );
+    await this.pgClient.query("BEGIN");
+
+    try {
+      for (const uid of affectedUsers) {
+        await this.persistAllBalances(uid, this.pgClient);
+      }
+
+      await this.pgClient.query("COMMIT");
+    } catch (error) {
+      await this.pgClient.query("ROLLBACK");
+      throw error;
+    }
   }
 
   async onRamp(userId: string, asset: string, amount: number) {
