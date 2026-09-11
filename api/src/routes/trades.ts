@@ -26,7 +26,7 @@ tradesRouter.get("/", async (req: AuthRequest, res) => {
              FROM market_prices
              WHERE market = $1
              ORDER BY time DESC
-             LIMIT 50`,
+             LIMIT 500`,
       [market],
     );
 

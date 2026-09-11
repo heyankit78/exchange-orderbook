@@ -99,8 +99,8 @@ export function Depth({ market }: { market: string }) {
   }, [market]);
 
   return (
-    <div>
-      <div className="flex border-b border-baseBorderLight">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 flex border-b border-baseBorderLight">
         <button
           onClick={() => setActiveView("orderbook")}
           className={`px-4 py-3 text-sm ${
@@ -124,11 +124,13 @@ export function Depth({ market }: { market: string }) {
         </button>
       </div>
 
-      {activeView === "orderbook" ? (
-        <OrderBookView bids={bids || []} asks={asks || []} price={price} />
-      ) : (
-        <TradeHistory market={market} />
-      )}
+      <div className="min-h-0 flex-1">
+        {activeView === "orderbook" ? (
+          <OrderBookView bids={bids || []} asks={asks || []} price={price} />
+        ) : (
+          <TradeHistory market={market} />
+        )}
+      </div>
     </div>
   );
 }
