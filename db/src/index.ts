@@ -131,7 +131,7 @@ async function processDbMessage(data: DbMessage) {
         side,
         executedQuantity,
         orderType,
-        status,
+        status: incomingStatus,
       } = orderData;
 
       const qty = Number(quantity);
@@ -147,13 +147,19 @@ async function processDbMessage(data: DbMessage) {
         );
       }
 
-      // let status = "OPEN";
+      const normalizedOrderType = orderType === "MARKET" ? "MARKET" : "LIMIT";
 
-      // if (filled > 0 && filled < qty) {
-      //   status = "PARTIALLY_FILLED";
-      // } else if (filled >= qty) {
-      //   status = "FILLED";
-      // }
+      const status =
+        incomingStatus ??
+        (normalizedOrderType === "MARKET"
+          ? filled >= qty
+            ? "FILLED"
+            : "CANCELLED"
+          : filled >= qty
+            ? "FILLED"
+            : filled > 0
+              ? "PARTIALLY_FILLED"
+              : "OPEN");
 
       await pgClient.query(
         `
@@ -168,45 +174,44 @@ async function processDbMessage(data: DbMessage) {
       filled,
       order_status
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 
-   ON CONFLICT (order_id)
-DO UPDATE SET
-
-  filled = GREATEST(
-    orders.filled,
-    EXCLUDED.filled
-  ),
-
-  order_status =
-    CASE
-      WHEN orders.order_status IN ('FILLED', 'CANCELLED')
-        THEN orders.order_status
-
-      WHEN EXCLUDED.order_status = 'FILLED'
-        THEN 'FILLED'
-
-      WHEN EXCLUDED.order_status = 'CANCELLED'
-        THEN 'CANCELLED'
-
-      WHEN GREATEST(
+    ON CONFLICT (order_id)
+    DO UPDATE SET
+      filled = GREATEST(
         orders.filled,
         EXCLUDED.filled
-      ) > 0
-        THEN 'PARTIALLY_FILLED'
+      ),
 
-      ELSE 'OPEN'
-    END,
+      order_status =
+        CASE
+          WHEN orders.order_status IN ('FILLED', 'CANCELLED')
+            THEN orders.order_status
 
-  updated_at = NOW()
-  `,
+          WHEN EXCLUDED.order_status = 'FILLED'
+            THEN 'FILLED'
+
+          WHEN EXCLUDED.order_status = 'CANCELLED'
+            THEN 'CANCELLED'
+
+          WHEN GREATEST(
+            orders.filled,
+            EXCLUDED.filled
+          ) > 0
+            THEN 'PARTIALLY_FILLED'
+
+          ELSE 'OPEN'
+        END,
+
+      updated_at = NOW()
+    `,
         [
           orderId,
           userId,
           market,
           side,
           price,
-          orderType,
+          normalizedOrderType,
           quantity,
           filled,
           status,
@@ -215,6 +220,7 @@ DO UPDATE SET
 
       console.log("Order saved:", {
         orderId,
+        orderType: normalizedOrderType,
         filled,
         status,
       });

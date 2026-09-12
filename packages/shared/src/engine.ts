@@ -12,7 +12,7 @@ export type MessageToEngine =
       type: typeof CREATE_ORDER;
       data: {
         market: string;
-        price: string;
+        price?: string;
         quantity: string;
         side: Side;
         orderType?: "limit" | "market";
