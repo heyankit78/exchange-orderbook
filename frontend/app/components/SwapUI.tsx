@@ -278,15 +278,15 @@ export function SwapUI({
             ? "PARTIALLY_FILLED"
             : "OPEN";
 
-      const newOrder: OrderHistoryItem = {
-        orderId: response.orderId,
-        market,
-        side: activeTab,
-        price,
-        quantity,
-        filled: String(executedQuantity),
-        status,
-      };
+      // const newOrder: OrderHistoryItem = {
+      //   orderId: response.orderId,
+      //   market,
+      //   side: activeTab,
+      //   price,
+      //   quantity,
+      //   filled: String(executedQuantity),
+      //   status,
+      // };
 
       // setOrderHistory((prev) => [
       //   newOrder,
@@ -371,6 +371,9 @@ export function SwapUI({
               price: String(existingOrder.price),
               quantity: String(existingOrder.quantity),
               filled: String(update.filled),
+              remaining: String(
+                Number(existingOrder.quantity) - Number(update.filled),
+              ),
               status: update.status,
             };
 
@@ -390,7 +393,7 @@ export function SwapUI({
             order.orderId === update.orderId
               ? {
                   ...order,
-                  filled: update.filled,
+                  filled: Number(update.filled),
                 }
               : order,
           );
@@ -440,6 +443,9 @@ export function SwapUI({
           price: String(existingOrder.price),
           quantity: String(existingOrder.quantity),
           filled: String(existingOrder.filled),
+          remaining: String(
+            Number(existingOrder.quantity) - Number(existingOrder.filled),
+          ),
           status: "CANCELLED",
         };
 
@@ -487,7 +493,7 @@ export function SwapUI({
 
   const assetBalance = balances?.[balanceAsset];
 
-  const availableBalance = assetBalance?.available;
+  const availableBalance = assetBalance?.available || 0;
 
   const requiredBalance =
     activeTab === "buy" ? Number(price) * Number(quantity) : Number(quantity);

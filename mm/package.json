@@ -12,7 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@repo/shared": "*",
+    "@repo/shared": "workspace:*",
     "axios": "^1.7.2",
     "pg": "^8.23.0"
   },

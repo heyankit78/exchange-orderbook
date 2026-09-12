@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AskTable } from "./AskTable";
 import { BidTable } from "./BidTable";
 
@@ -13,15 +13,88 @@ export function OrderBookView({
 }) {
   const [filter, setFilter] = useState<"all" | "bids" | "asks">("all");
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const middlePriceRef = useRef<HTMLDivElement>(null);
+
+  const middleAnchorTopRef = useRef<number | null>(null);
+  const hasCenteredRef = useRef(false);
+  const userScrollingRef = useRef(false);
+
+  // Reset when switching filter
+  useEffect(() => {
+    hasCenteredRef.current = false;
+    middleAnchorTopRef.current = null;
+  }, [filter]);
+
+  // Initial centering
+  useEffect(() => {
+    if (filter !== "all") return;
+    if (!price) return;
+    if (hasCenteredRef.current) return;
+    if (!middlePriceRef.current) return;
+
+    hasCenteredRef.current = true;
+
+    requestAnimationFrame(() => {
+      middlePriceRef.current?.scrollIntoView({
+        block: "center",
+      });
+
+      requestAnimationFrame(() => {
+        middleAnchorTopRef.current =
+          middlePriceRef.current?.getBoundingClientRect().top ?? null;
+      });
+    });
+  }, [price, filter, asks.length, bids.length]);
+
+  // Keep middle price at same visual position after orderbook updates
+  useLayoutEffect(() => {
+    if (filter !== "all") return;
+    if (userScrollingRef.current) return;
+
+    const scrollContainer = scrollContainerRef.current;
+    const middlePrice = middlePriceRef.current;
+
+    if (!scrollContainer || !middlePrice) return;
+
+    const currentTop = middlePrice.getBoundingClientRect().top;
+
+    if (middleAnchorTopRef.current === null) {
+      middleAnchorTopRef.current = currentTop;
+      return;
+    }
+
+    const delta = currentTop - middleAnchorTopRef.current;
+
+    if (Math.abs(delta) > 0.5) {
+      scrollContainer.scrollTop += delta;
+    }
+  }, [asks, bids, price, filter]);
+
+  const handleUserScrollStart = () => {
+    userScrollingRef.current = true;
+  };
+
+  const handleUserScrollEnd = () => {
+    window.setTimeout(() => {
+      userScrollingRef.current = false;
+
+      if (middlePriceRef.current) {
+        middleAnchorTopRef.current =
+          middlePriceRef.current.getBoundingClientRect().top;
+      }
+    }, 150);
+  };
+
   return (
-    <div className="flex flex-col h-full bg-baseBackgroundL1">
+    <div className="flex h-full min-h-0 flex-col bg-baseBackgroundL1">
       {/* Filter Tabs */}
-      <div className="flex items-center gap-5 px-3 pt-3 pb-2 border-b border-baseBorderLight">
+      <div className="flex shrink-0 items-center gap-5 border-b border-baseBorderLight px-3 pb-2 pt-3">
         <button
           onClick={() => setFilter("all")}
-          className={`text-sm font-medium pb-1 transition ${
+          className={`pb-1 text-sm font-medium transition ${
             filter === "all"
-              ? "text-white border-b-2 border-white"
+              ? "border-b-2 border-white text-white"
               : "text-baseTextMedEmphasis hover:text-white"
           }`}
         >
@@ -30,9 +103,9 @@ export function OrderBookView({
 
         <button
           onClick={() => setFilter("bids")}
-          className={`text-sm font-medium pb-1 transition ${
+          className={`pb-1 text-sm font-medium transition ${
             filter === "bids"
-              ? "text-greenText border-b-2 border-greenText"
+              ? "border-b-2 border-greenText text-greenText"
               : "text-greenText/70 hover:text-greenText"
           }`}
         >
@@ -41,9 +114,9 @@ export function OrderBookView({
 
         <button
           onClick={() => setFilter("asks")}
-          className={`text-sm font-medium pb-1 transition ${
+          className={`pb-1 text-sm font-medium transition ${
             filter === "asks"
-              ? "text-redText border-b-2 border-redText"
+              ? "border-b-2 border-redText text-redText"
               : "text-redText/70 hover:text-redText"
           }`}
         >
@@ -52,10 +125,25 @@ export function OrderBookView({
       </div>
 
       {/* Header */}
-      <TableHeader />
+      <div className="shrink-0">
+        <TableHeader />
+      </div>
 
-      {/* Orderbook rows */}
-      <div className="flex flex-col flex-1 overflow-hidden">
+      {/* ONE shared scroll container */}
+      <div
+        ref={scrollContainerRef}
+        onWheel={() => {
+          handleUserScrollStart();
+          handleUserScrollEnd();
+        }}
+        onTouchStart={handleUserScrollStart}
+        onTouchEnd={handleUserScrollEnd}
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+        style={{
+          overflowAnchor: "none",
+          scrollbarWidth: "thin",
+        }}
+      >
         {/* Asks */}
         {(filter === "all" || filter === "asks") && (
           <div className="flex flex-col justify-end">
@@ -63,16 +151,19 @@ export function OrderBookView({
           </div>
         )}
 
-        {/* Middle price */}
+        {/* Middle Price */}
         {filter === "all" && price && (
-          <div className="flex items-center gap-2 px-3 py-3 border-y border-baseBorderLight bg-baseBackgroundL2">
-            <span className="text-greenText text-xl font-semibold">
+          <div
+            ref={middlePriceRef}
+            className="flex items-center gap-2 border-y border-baseBorderLight bg-baseBackgroundL2 px-3 py-3"
+          >
+            <span className="text-xl font-semibold text-greenText">
               {Number(price).toFixed(2)}
             </span>
 
-            <span className="text-greenText text-xs">▲</span>
+            <span className="text-xs text-greenText">▲</span>
 
-            <span className="text-xs text-baseTextMedEmphasis ml-1">
+            <span className="ml-1 text-xs text-baseTextMedEmphasis">
               Last Price
             </span>
           </div>
@@ -91,12 +182,12 @@ export function OrderBookView({
 
 function TableHeader() {
   return (
-    <div className="grid grid-cols-3 px-3 py-2 text-[11px] border-b border-baseBorderLight">
+    <div className="grid grid-cols-3 border-b border-baseBorderLight px-3 py-2 text-[11px]">
       <div className="text-baseTextMedEmphasis">Price</div>
 
-      <div className="text-baseTextMedEmphasis text-right">Size</div>
+      <div className="text-right text-baseTextMedEmphasis">Size</div>
 
-      <div className="text-baseTextMedEmphasis text-right">Total</div>
+      <div className="text-right text-baseTextMedEmphasis">Total</div>
     </div>
   );
 }

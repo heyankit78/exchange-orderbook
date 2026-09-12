@@ -2,8 +2,21 @@
 
 import { MarketBar } from "@/app/components/MarketBar";
 import { SwapUI } from "@/app/components/SwapUI";
-import { TradeView } from "@/app/components/TradeView";
+// import { TradeView } from "@/app/components/TradeView";
+
+const TradeView = dynamic(
+  () => import("@/app/components/TradeView").then((mod) => mod.TradeView),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center">
+        Loading chart...
+      </div>
+    ),
+  },
+);
 import { Depth } from "@/app/components/depth/Depth";
+import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 
 export default function Page() {

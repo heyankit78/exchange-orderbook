@@ -197,10 +197,10 @@ export class SignalingManager {
   // PUBLIC SEND MESSAGE
   // =====================================================
 
-  sendMessage(message: IncomingWsMessage) {
+  sendMessage(message: Record<string, unknown>) {
     if (message.method === "SUBSCRIBE") {
       const subscriptionsToSend: string[] = [];
-
+      //@ts-ignore
       message.params?.forEach((subscription: string) => {
         const currentCount = this.subscriptions.get(subscription) ?? 0;
 
@@ -238,7 +238,7 @@ export class SignalingManager {
 
     if (message.method === "UNSUBSCRIBE") {
       const subscriptionsToRemove: string[] = [];
-
+      //@ts-ignore
       message.params?.forEach((subscription: string) => {
         const currentCount = this.subscriptions.get(subscription) ?? 0;
 
@@ -284,6 +284,7 @@ export class SignalingManager {
     // =====================================================
 
     if (message.method === "AUTH") {
+      //@ts-ignore
       this.authToken = message.token;
 
       if (!this.initialized) {

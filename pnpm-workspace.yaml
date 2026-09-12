@@ -1,0 +1,13 @@
+packages:
+  - "api"
+  - "engine"
+  - "db"
+  - "ws"
+  - "mm"
+  - "frontend"
+  - "packages/*"
+allowBuilds:
+  bufferutil: true
+  esbuild: true
+  unrs-resolver: true
+  utf-8-validate: true
