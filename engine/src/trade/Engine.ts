@@ -195,6 +195,7 @@ export class Engine {
             message.data.quantity,
             message.data.side,
             message.data.userId,
+            message.data.orderType ?? "limit",
             streamId,
           );
           RedisManager.getInstance().sendToApi(clientId, {
@@ -393,10 +394,11 @@ export class Engine {
 
   async createOrder(
     market: string,
-    price: string,
+    price: string | undefined,
     quantity: string,
     side: "buy" | "sell",
     takerUserId: string,
+    orderType: "limit" | "market" = "limit",
     streamId?: string,
   ) {
     const orderbook = this.orderbooks.find((o) => o.ticker() === market);
@@ -425,6 +427,23 @@ export class Engine {
     if (existingInDb.rows.length > 0) {
       throw new Error("Order already processed");
     }
+
+    if (orderType === "market") {
+      return this.createMarketOrder(
+        orderbook,
+        market,
+        quantity,
+        side,
+        takerUserId,
+        orderId,
+        streamId,
+      );
+    }
+
+    if (!price) {
+      throw new Error("Price is required for limit order");
+    }
+
     await this.checkAndLockFunds(
       baseAsset,
       quoteAsset,
@@ -464,30 +483,221 @@ export class Engine {
     );
 
     await this.createDbTrades(side, fills, market, takerUserId);
-    await this.updateDbOrders(order, executedQuantity, fills, market);
+    await this.updateDbOrders(order, executedQuantity, fills, market, "limit");
     await this.publisWsDepthUpdates(fills, price, side, market);
     await this.publishUserOrderUpdates(order, executedQuantity, fills);
     await this.publishWsTrades(side, fills, market);
     await this.publishUserTradeUpdates(side, fills, market, takerUserId);
     return { executedQuantity, fills, orderId: order.orderId };
   }
+  private async updateMarketBalance(
+    takerUserId: string,
+    baseAsset: string,
+    quoteAsset: string,
+    side: "buy" | "sell",
+    fills: Fill[],
+  ) {
+    const affectedUsers = new Set<string>([takerUserId]);
+
+    const takerBalance = this.balances.get(takerUserId)!;
+
+    if (side === "buy") {
+      let actualCost = 0;
+
+      for (const fill of fills) {
+        const makerBalance = this.balances.get(fill.makerUserId)!;
+
+        const tradeValue = fill.quantity * Number(fill.price);
+
+        actualCost += tradeValue;
+
+        makerBalance[quoteAsset].available += tradeValue;
+        makerBalance[baseAsset].locked -= fill.quantity;
+
+        takerBalance[baseAsset].available += fill.quantity;
+
+        affectedUsers.add(fill.makerUserId);
+      }
+
+      takerBalance[quoteAsset].locked -= actualCost;
+    } else {
+      let executed = 0;
+
+      for (const fill of fills) {
+        const makerBalance = this.balances.get(fill.makerUserId)!;
+
+        const tradeValue = fill.quantity * Number(fill.price);
+
+        executed += fill.quantity;
+
+        makerBalance[quoteAsset].locked -= tradeValue;
+        makerBalance[baseAsset].available += fill.quantity;
+
+        takerBalance[quoteAsset].available += tradeValue;
+        takerBalance[baseAsset].locked -= fill.quantity;
+
+        affectedUsers.add(fill.makerUserId);
+      }
+
+      const unfilled = fills.length ? 0 : 0;
+    }
+
+    await this.pgClient.query("BEGIN");
+
+    try {
+      for (const uid of affectedUsers) {
+        await this.persistAllBalances(uid, this.pgClient);
+      }
+
+      await this.pgClient.query("COMMIT");
+    } catch (error) {
+      await this.pgClient.query("ROLLBACK");
+      throw error;
+    }
+  }
+  private async createMarketOrder(
+    orderbook: Orderbook,
+    market: string,
+    quantity: string,
+    side: "buy" | "sell",
+    takerUserId: string,
+    orderId: string,
+    streamId?: string,
+  ) {
+    const [baseAsset, quoteAsset] = market.split("_");
+
+    const qty = Number(quantity);
+
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw new Error("Invalid quantity");
+    }
+
+    const order: Order = {
+      orderId,
+      userId: takerUserId,
+      price: 0,
+      quantity: qty,
+      filled: 0,
+      side,
+    };
+
+    if (side === "sell") {
+      const bal = this.balances.get(takerUserId);
+
+      if (!bal?.[baseAsset] || bal[baseAsset].available < qty) {
+        throw new Error("Insufficient funds");
+      }
+
+      bal[baseAsset].available -= qty;
+      bal[baseAsset].locked += qty;
+
+      await this.persistBalance(takerUserId, baseAsset);
+    }
+
+    if (side === "buy") {
+      const asks = [...orderbook.asks].sort((a, b) => a.price - b.price);
+
+      let remaining = qty;
+      let estimatedCost = 0;
+
+      for (const ask of asks) {
+        if (ask.userId === takerUserId) continue;
+
+        const available = ask.quantity - ask.filled;
+        const take = Math.min(available, remaining);
+
+        estimatedCost += take * ask.price;
+        remaining -= take;
+
+        if (remaining <= 0) break;
+      }
+
+      const balance = this.balances.get(takerUserId);
+
+      if (
+        !balance?.[quoteAsset] ||
+        balance[quoteAsset].available < estimatedCost
+      ) {
+        throw new Error("Insufficient funds");
+      }
+
+      balance[quoteAsset].available -= estimatedCost;
+      balance[quoteAsset].locked += estimatedCost;
+
+      await this.persistBalance(takerUserId, quoteAsset);
+    }
+
+    const { fills, executedQuantity } = orderbook.addMarketOrder(
+      order,
+      streamId,
+    );
+
+    const remainingQuantity = qty - executedQuantity;
+
+    if (side === "sell" && remainingQuantity > 0) {
+      const balance = this.balances.get(takerUserId);
+
+      if (!balance?.[baseAsset]) {
+        throw new Error("Balance not found");
+      }
+
+      balance[baseAsset].locked -= remainingQuantity;
+      balance[baseAsset].available += remainingQuantity;
+    }
+    await this.updateMarketBalance(
+      takerUserId,
+      baseAsset,
+      quoteAsset,
+      side,
+      fills,
+    );
+
+    await this.createDbTrades(side, fills, market, takerUserId);
+
+    await this.updateDbOrders(order, executedQuantity, fills, market, "market");
+
+    await this.publishWsTrades(side, fills, market);
+
+    await this.publishUserTradeUpdates(side, fills, market, takerUserId);
+
+    await this.publishUserOrderUpdates(
+      order,
+      executedQuantity,
+      fills,
+      "market",
+    );
+
+    for (const fill of fills) {
+      this.sendUpdatedDepthAt(fill.price, market);
+    }
+
+    return {
+      orderId,
+      fills,
+      executedQuantity,
+    };
+  }
   async publishUserOrderUpdates(
     order: Order,
     executedQuantity: number,
     fills: Fill[],
+    orderType: "limit" | "market" = "limit",
   ) {
     // -----------------------------
     // TAKER / INCOMING ORDER UPDATE
     // -----------------------------
 
-    let takerStatus: "OPEN" | "PARTIALLY_FILLED" | "FILLED";
-
-    if (executedQuantity === 0) {
-      takerStatus = "OPEN";
-    } else if (executedQuantity >= order.quantity) {
-      takerStatus = "FILLED";
+    let takerStatus: "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
+    if (orderType === "market") {
+      takerStatus = executedQuantity >= order.quantity ? "FILLED" : "CANCELLED";
     } else {
-      takerStatus = "PARTIALLY_FILLED";
+      if (executedQuantity === 0) {
+        takerStatus = "OPEN";
+      } else if (executedQuantity >= order.quantity) {
+        takerStatus = "FILLED";
+      } else {
+        takerStatus = "PARTIALLY_FILLED";
+      }
     }
 
     RedisManager.getInstance().publishMessage(`user_trades@${order.userId}`, {
@@ -736,7 +946,18 @@ export class Engine {
     executedQuantity: number,
     fills: Fill[],
     market: string,
+    orderType: "limit" | "market" = "limit",
   ) {
+    const status =
+      orderType === "market"
+        ? executedQuantity >= order.quantity
+          ? "FILLED"
+          : "CANCELLED"
+        : executedQuantity >= order.quantity
+          ? "FILLED"
+          : executedQuantity > 0
+            ? "PARTIALLY_FILLED"
+            : "OPEN";
     await RedisManager.getInstance().pushMessage({
       type: ORDER_UPDATE,
       data: {
@@ -744,9 +965,10 @@ export class Engine {
         userId: order.userId,
         executedQuantity,
         market,
-        price: order.price.toString(),
+        price: orderType === "market" ? null : order.price.toString(),
         quantity: order.quantity.toString(),
         side: order.side,
+        orderType: orderType.toUpperCase() as "LIMIT" | "MARKET",
       },
     });
     for (const fill of fills) {

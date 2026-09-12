@@ -130,6 +130,8 @@ async function processDbMessage(data: DbMessage) {
         quantity,
         side,
         executedQuantity,
+        orderType,
+        status,
       } = orderData;
 
       const qty = Number(quantity);
@@ -145,13 +147,13 @@ async function processDbMessage(data: DbMessage) {
         );
       }
 
-      let status = "OPEN";
+      // let status = "OPEN";
 
-      if (filled > 0 && filled < qty) {
-        status = "PARTIALLY_FILLED";
-      } else if (filled >= qty) {
-        status = "FILLED";
-      }
+      // if (filled > 0 && filled < qty) {
+      //   status = "PARTIALLY_FILLED";
+      // } else if (filled >= qty) {
+      //   status = "FILLED";
+      // }
 
       await pgClient.query(
         `
@@ -161,49 +163,54 @@ async function processDbMessage(data: DbMessage) {
       market,
       side,
       price,
+      order_type,
       quantity,
       filled,
       order_status
     )
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 
-    ON CONFLICT (order_id)
-    DO UPDATE SET
+   ON CONFLICT (order_id)
+DO UPDATE SET
 
-      filled =
-        GREATEST(
-          orders.filled,
-          EXCLUDED.filled
-        ),
+  filled = GREATEST(
+    orders.filled,
+    EXCLUDED.filled
+  ),
 
-      order_status =
-        CASE
+  order_status =
+    CASE
+      WHEN orders.order_status IN ('FILLED', 'CANCELLED')
+        THEN orders.order_status
 
-          -- Never move a terminal order backwards
-          WHEN orders.order_status IN (
-            'FILLED',
-            'CANCELLED'
-          )
-          THEN orders.order_status
+      WHEN EXCLUDED.order_status = 'FILLED'
+        THEN 'FILLED'
 
-          -- New information says it is fully filled
-          WHEN EXCLUDED.filled >= orders.quantity
-          THEN 'FILLED'
+      WHEN EXCLUDED.order_status = 'CANCELLED'
+        THEN 'CANCELLED'
 
-          -- At least partially filled
-          WHEN GREATEST(
-            orders.filled,
-            EXCLUDED.filled
-          ) > 0
-          THEN 'PARTIALLY_FILLED'
+      WHEN GREATEST(
+        orders.filled,
+        EXCLUDED.filled
+      ) > 0
+        THEN 'PARTIALLY_FILLED'
 
-          ELSE 'OPEN'
+      ELSE 'OPEN'
+    END,
 
-        END,
-
-      updated_at = NOW()
+  updated_at = NOW()
   `,
-        [orderId, userId, market, side, price, quantity, filled, status],
+        [
+          orderId,
+          userId,
+          market,
+          side,
+          price,
+          orderType,
+          quantity,
+          filled,
+          status,
+        ],
       );
 
       console.log("Order saved:", {

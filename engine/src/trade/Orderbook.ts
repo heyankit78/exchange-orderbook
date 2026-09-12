@@ -153,7 +153,80 @@ export class Orderbook {
       executedQuantity,
     };
   }
+  addMarketOrder(
+    order: Order,
+    commandId?: string,
+  ): {
+    fills: Fill[];
+    executedQuantity: number;
+  } {
+    const fills: Fill[] = [];
+    let executedQuantity = 0;
 
+    const oppositeBook =
+      order.side === "buy"
+        ? this.asks.sort((a, b) => a.price - b.price)
+        : this.bids.sort((a, b) => b.price - a.price);
+
+    let i = 0;
+
+    while (executedQuantity < order.quantity && i < oppositeBook.length) {
+      const maker = oppositeBook[i];
+
+      // Self-trade prevention:
+      // skip own order, but continue checking deeper liquidity.
+      if (maker.userId === order.userId) {
+        i++;
+        continue;
+      }
+
+      const makerRemaining = maker.quantity - maker.filled;
+
+      if (makerRemaining <= 0) {
+        oppositeBook.splice(i, 1);
+        continue;
+      }
+
+      const takerRemaining = order.quantity - executedQuantity;
+
+      const fillQuantity = Math.min(makerRemaining, takerRemaining);
+
+      maker.filled += fillQuantity;
+      executedQuantity += fillQuantity;
+
+      const fillIndex = fills.length;
+
+      fills.push({
+        price: maker.price.toString(),
+        quantity: fillQuantity,
+
+        tradeId: commandId ? `trade-${commandId}-${fillIndex}` : randomUUID(),
+
+        makerUserId: maker.userId,
+        makerOrderId: maker.orderId,
+
+        makerFilledQuantity: maker.filled,
+        makerOrderQuantity: maker.quantity,
+      });
+
+      // Completely consumed maker
+      if (maker.filled >= maker.quantity) {
+        oppositeBook.splice(i, 1);
+
+        // DON'T i++
+        // because next order shifted into current index.
+      } else {
+        i++;
+      }
+    }
+
+    order.filled = executedQuantity;
+
+    return {
+      fills,
+      executedQuantity,
+    };
+  }
   matchAsk(
     order: Order,
     commandId?: string,

@@ -38,7 +38,7 @@ export function SwapUI({
 
   const [activeTab, setActiveTab] = useState<"buy" | "sell">("buy");
 
-  const [type, setType] = useState("limit");
+  const [type, setType] = useState<"limit" | "market">("limit");
 
   const [loading, setLoading] = useState(false);
   const [balances, setBalances] = useState<Balances | null>(null);
@@ -252,18 +252,23 @@ export function SwapUI({
   //   }
   // };
   const handleSubmit = async () => {
-    if (!price || !quantity || Number(price) <= 0 || Number(quantity) <= 0) {
+    if (!quantity || Number(quantity) <= 0) {
       return;
     }
 
+    if (type === "limit" && (!price || Number(price) <= 0)) {
+      return;
+    }
     if (!session?.accessToken) return;
 
     try {
       setLoading(true);
+      // let orderType =  : type === "limit" ? price : undefined,
 
       const response = await placeOrder(
         market,
-        price,
+        type,
+        type === "limit" ? price : undefined,
         quantity,
         activeTab,
         session.accessToken,
@@ -496,9 +501,16 @@ export function SwapUI({
   const availableBalance = assetBalance?.available || 0;
 
   const requiredBalance =
-    activeTab === "buy" ? Number(price) * Number(quantity) : Number(quantity);
+    activeTab === "sell"
+      ? Number(quantity)
+      : type === "limit"
+        ? Number(price) * Number(quantity)
+        : 0;
 
-  const insufficientBalance = requiredBalance > availableBalance;
+  const insufficientBalance =
+    type === "market" && activeTab === "buy"
+      ? false
+      : requiredBalance > availableBalance;
 
   const userOrdersPanel = (
     <div className="h-full flex flex-col bg-baseBackgroundL1">
@@ -782,30 +794,39 @@ export function SwapUI({
 
                 {/* PRICE */}
 
-                <div className="flex flex-col gap-2">
-                  <p className="text-xs font-normal text-baseTextMedEmphasis">
-                    Price
-                  </p>
+                {type === "limit" ? (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs font-normal text-baseTextMedEmphasis">
+                      Price
+                    </p>
 
-                  <div className="flex flex-col relative">
-                    <input
-                      step="0.01"
-                      placeholder="0"
-                      className="h-12 rounded-lg border-2 border-solid border-baseBorderLight bg-baseBackgroundL1 pr-12 text-right text-2xl leading-9 text-baseTextHighEmphasis placeholder-baseTextMedEmphasis ring-0 transition focus:border-accentBlue focus:ring-0"
-                      type="text"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                    />
+                    <div className="relative flex flex-col">
+                      <input
+                        placeholder="0"
+                        className="h-12 rounded-lg border-2 border-baseBorderLight bg-baseBackgroundL1 pr-12 text-right text-2xl"
+                        value={price}
+                        onChange={(e) => setPrice(e.target.value)}
+                      />
 
-                    <div className="flex flex-row absolute right-1 top-1 p-2">
-                      <div className="relative">
+                      <div className="absolute right-1 top-1 p-2">
                         <span className="text-xs font-medium">
                           {quoteAsset}
                         </span>
                       </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs text-baseTextMedEmphasis">Price</p>
+
+                    <div className="flex h-12 items-center justify-between rounded-lg border-2 border-baseBorderLight px-3">
+                      <span className="text-baseTextMedEmphasis">
+                        Market Price
+                      </span>
+                      <span className="text-xs">{quoteAsset}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* QUANTITY */}
@@ -859,8 +880,8 @@ export function SwapUI({
                 disabled={
                   loading ||
                   balanceLoading ||
-                  !price ||
                   !quantity ||
+                  (type === "limit" && !price) ||
                   insufficientBalance
                 }
                 onClick={handleSubmit}
@@ -880,7 +901,7 @@ export function SwapUI({
               </button>
 
               {/* FLAGS */}
-
+              {/* 
               <div className="flex justify-between flex-row mt-1">
                 <div className="flex flex-row gap-2">
                   <div className="flex items-center">
@@ -907,7 +928,7 @@ export function SwapUI({
                     </label>
                   </div>
                 </div>
-              </div>
+              </div> */}
             </div>
           </div>
         </div>

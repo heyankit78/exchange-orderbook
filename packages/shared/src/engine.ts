@@ -15,6 +15,7 @@ export type MessageToEngine =
         price: string;
         quantity: string;
         side: Side;
+        orderType?: "limit" | "market";
         userId: string;
       };
     }

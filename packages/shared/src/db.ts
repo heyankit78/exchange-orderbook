@@ -14,6 +14,10 @@ export type OrderUpdateMessage = {
         quantity: string;
         side: Side;
         executedQuantity: number;
+
+        orderType: "LIMIT" | "MARKET";
+
+        status: "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
       }
     | {
         orderId: string;

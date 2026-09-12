@@ -46,33 +46,31 @@ async function initializeDB() {
   console.log("balances table ready");
 
   await client.query(`
-    CREATE TABLE IF NOT EXISTS orders (
-      order_id VARCHAR(120) PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS orders (
+  order_id VARCHAR(120) PRIMARY KEY,
 
-      user_id INTEGER NOT NULL
-        REFERENCES users(id)
-        ON DELETE CASCADE,
+  user_id INTEGER NOT NULL
+    REFERENCES users(id)
+    ON DELETE CASCADE,
 
-      market VARCHAR(20) NOT NULL,
+  market VARCHAR(20) NOT NULL,
 
-      side VARCHAR(10) NOT NULL,
+  side VARCHAR(10) NOT NULL,
 
-      price NUMERIC(30, 10) NOT NULL,
+  order_type VARCHAR(10) NOT NULL DEFAULT 'LIMIT',
 
-      quantity NUMERIC(30, 10) NOT NULL,
+  price NUMERIC(30, 10),
 
-      filled NUMERIC(30, 10)
-        NOT NULL DEFAULT 0,
+  quantity NUMERIC(30, 10) NOT NULL,
 
-      order_status VARCHAR(20)
-        NOT NULL DEFAULT 'OPEN',
+  filled NUMERIC(30, 10) NOT NULL DEFAULT 0,
 
-      created_at TIMESTAMPTZ
-        DEFAULT NOW(),
+  order_status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
 
-      updated_at TIMESTAMPTZ
-        DEFAULT NOW()
-    );
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
   `);
 
   console.log("orders table ready");

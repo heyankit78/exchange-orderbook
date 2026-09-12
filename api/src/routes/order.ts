@@ -22,7 +22,7 @@ const pgClient = new Client({
 pgClient.connect();
 
 orderRouter.post("/", async (req: AuthRequest, res) => {
-  const { market, price, quantity, side } = req.body;
+  const { market, orderType = "limit", price, quantity, side } = req.body;
 
   const userId = req.user!.userId;
 
@@ -30,6 +30,7 @@ orderRouter.post("/", async (req: AuthRequest, res) => {
     type: CREATE_ORDER,
     data: {
       market,
+      orderType,
       price,
       quantity,
       side,
@@ -37,6 +38,17 @@ orderRouter.post("/", async (req: AuthRequest, res) => {
     },
   })) as MessageToApi;
 
+  if (orderType === "limit" && !price) {
+    return res.status(400).json({
+      message: "price is required for limit orders",
+    });
+  }
+
+  if (orderType !== "limit" && orderType !== "market") {
+    return res.status(400).json({
+      message: "Invalid order type",
+    });
+  }
   if (response.type === "ORDER_CANCELLED") {
     return res.status(400).json({
       message: response.payload.error ?? "Order rejected",

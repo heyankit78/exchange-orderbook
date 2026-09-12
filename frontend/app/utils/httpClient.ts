@@ -112,7 +112,8 @@ export async function getMyTrades(market: string, token: string) {
 
 export async function placeOrder(
   market: string,
-  price: string,
+  orderType: "limit" | "market",
+  price: string | undefined,
   quantity: string,
   side: "buy" | "sell",
   token: string,
@@ -121,6 +122,7 @@ export async function placeOrder(
     "/order",
     {
       market,
+      orderType,
       price,
       quantity,
       side,

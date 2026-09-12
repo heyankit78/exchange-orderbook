@@ -53,25 +53,13 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     const publishSpy = vi.spyOn(engine, "publishWsTrades");
@@ -80,7 +68,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "1",
           side: "buy",
@@ -94,7 +82,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "1",
           side: "sell",
@@ -111,21 +99,15 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "1",
           side: "buy",
@@ -148,25 +130,19 @@ describe("Engine", () => {
     expect(pushMessageMock).not.toHaveBeenCalled();
   });
 
-  it("Locks INR when buy order is placed", async () => {
+  it("Locks USDC when buy order is placed", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "buy",
@@ -178,29 +154,23 @@ describe("Engine", () => {
 
     const userBalance = (engine as any).balances.get("1");
 
-    expect(userBalance.INR.available).toBe(8000);
-    expect(userBalance.INR.locked).toBe(2000);
+    expect(userBalance.USDC.available).toBe(8000);
+    expect(userBalance.USDC.locked).toBe(2000);
   });
 
-  it("Locks TATA when sell order is placed", async () => {
+  it("Locks BTC when sell order is placed", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("2", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "3",
           side: "sell",
@@ -212,33 +182,21 @@ describe("Engine", () => {
 
     const userBalance = (engine as any).balances.get("2");
 
-    expect(userBalance.TATA.available).toBe(7);
-    expect(userBalance.TATA.locked).toBe(3);
+    expect(userBalance.BTC.available).toBe(7);
+    expect(userBalance.BTC.locked).toBe(3);
   });
 
   it("Updates buyer and seller balances after a complete trade", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // Buyer places order first
@@ -246,7 +204,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "buy",
@@ -261,7 +219,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "sell",
@@ -274,38 +232,26 @@ describe("Engine", () => {
     const buyerBalance = (engine as any).balances.get("1");
     const sellerBalance = (engine as any).balances.get("2");
 
-    expect(buyerBalance.INR.available).toBe(8000);
-    expect(buyerBalance.INR.locked).toBe(0);
-    expect(buyerBalance.TATA.available).toBe(2);
+    expect(buyerBalance.USDC.available).toBe(8000);
+    expect(buyerBalance.USDC.locked).toBe(0);
+    expect(buyerBalance.BTC.available).toBe(2);
 
-    expect(sellerBalance.TATA.available).toBe(8);
-    expect(sellerBalance.TATA.locked).toBe(0);
-    expect(sellerBalance.INR.available).toBe(2000);
+    expect(sellerBalance.BTC.available).toBe(8);
+    expect(sellerBalance.BTC.locked).toBe(0);
+    expect(sellerBalance.USDC.available).toBe(2000);
   });
 
   it("Refunds buyer when trade executes below buy limit price", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // Seller becomes maker at 900
@@ -313,7 +259,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "900",
           quantity: "2",
           side: "sell",
@@ -328,7 +274,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "buy",
@@ -341,45 +287,33 @@ describe("Engine", () => {
     const buyerBalance = (engine as any).balances.get("1");
     const sellerBalance = (engine as any).balances.get("2");
 
-    expect(buyerBalance.INR.available).toBe(8200);
-    expect(buyerBalance.INR.locked).toBe(0);
-    expect(buyerBalance.TATA.available).toBe(2);
+    expect(buyerBalance.USDC.available).toBe(8200);
+    expect(buyerBalance.USDC.locked).toBe(0);
+    expect(buyerBalance.BTC.available).toBe(2);
 
-    expect(sellerBalance.INR.available).toBe(1800);
-    expect(sellerBalance.TATA.available).toBe(8);
-    expect(sellerBalance.TATA.locked).toBe(0);
+    expect(sellerBalance.USDC.available).toBe(1800);
+    expect(sellerBalance.BTC.available).toBe(8);
+    expect(sellerBalance.BTC.locked).toBe(0);
   });
 
   it("Sends trade and order updates to DB worker after a trade", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "1",
           side: "buy",
@@ -393,7 +327,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "1",
           side: "sell",
@@ -423,32 +357,20 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "1",
           side: "buy",
@@ -462,7 +384,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "1",
           side: "sell",
@@ -483,7 +405,7 @@ describe("Engine", () => {
     expect(tradeMessage).toMatchObject({
       type: "TRADE_ADDED",
       data: {
-        market: "TATA_INR",
+        market: "BTC_USDC",
         price: "1000",
         quantity: "1",
         quoteQuantity: "1000",
@@ -501,25 +423,13 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // Seller rests first → seller becomes maker
@@ -527,7 +437,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "1",
           side: "sell",
@@ -542,7 +452,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "1",
           side: "buy",
@@ -563,42 +473,28 @@ describe("Engine", () => {
     expect(tradeMessage).toMatchObject({
       type: "TRADE_ADDED",
       data: {
-        market: "TATA_INR",
+        market: "BTC_USDC",
         price: "1000",
         quantity: "1",
         quoteQuantity: "1000",
-
         buyerUserId: "1",
         sellerUserId: "2",
-
         isBuyerMaker: false,
       },
     });
   });
 
-  it("Keeps remaining INR locked after a partial buy fill", async () => {
+  it("Keeps remaining USDC locked after a partial buy fill", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // Buyer places BUY 5 @1000
@@ -606,7 +502,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "5",
           side: "buy",
@@ -621,7 +517,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "sell",
@@ -634,38 +530,26 @@ describe("Engine", () => {
     const buyerBalance = (engine as any).balances.get("1");
     const sellerBalance = (engine as any).balances.get("2");
 
-    expect(buyerBalance.INR.available).toBe(5000);
-    expect(buyerBalance.INR.locked).toBe(3000);
-    expect(buyerBalance.TATA.available).toBe(2);
+    expect(buyerBalance.USDC.available).toBe(5000);
+    expect(buyerBalance.USDC.locked).toBe(3000);
+    expect(buyerBalance.BTC.available).toBe(2);
 
-    expect(sellerBalance.TATA.available).toBe(8);
-    expect(sellerBalance.TATA.locked).toBe(0);
-    expect(sellerBalance.INR.available).toBe(2000);
+    expect(sellerBalance.BTC.available).toBe(8);
+    expect(sellerBalance.BTC.locked).toBe(0);
+    expect(sellerBalance.USDC.available).toBe(2000);
   });
 
-  it("Keeps remaining TATA locked after a partial sell fill", async () => {
+  it("Keeps remaining BTC locked after a partial sell fill", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // Seller places SELL 5 @1000
@@ -673,7 +557,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "5",
           side: "sell",
@@ -688,7 +572,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "buy",
@@ -701,34 +585,28 @@ describe("Engine", () => {
     const buyerBalance = (engine as any).balances.get("1");
     const sellerBalance = (engine as any).balances.get("2");
 
-    expect(sellerBalance.TATA.available).toBe(5);
-    expect(sellerBalance.TATA.locked).toBe(3);
-    expect(sellerBalance.INR.available).toBe(2000);
+    expect(sellerBalance.BTC.available).toBe(5);
+    expect(sellerBalance.BTC.locked).toBe(3);
+    expect(sellerBalance.USDC.available).toBe(2000);
 
-    expect(buyerBalance.INR.available).toBe(8000);
-    expect(buyerBalance.INR.locked).toBe(0);
-    expect(buyerBalance.TATA.available).toBe(2);
+    expect(buyerBalance.USDC.available).toBe(8000);
+    expect(buyerBalance.USDC.locked).toBe(0);
+    expect(buyerBalance.BTC.available).toBe(2);
   });
 
-  it("Refunds locked INR when buy order is cancelled", async () => {
+  it("Refunds locked USDC when buy order is cancelled", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "5",
           side: "buy",
@@ -740,12 +618,12 @@ describe("Engine", () => {
 
     const afterOrderBalance = (engine as any).balances.get("1");
 
-    expect(afterOrderBalance.INR.available).toBe(5000);
-    expect(afterOrderBalance.INR.locked).toBe(5000);
+    expect(afterOrderBalance.USDC.available).toBe(5000);
+    expect(afterOrderBalance.USDC.locked).toBe(5000);
 
     // Need the generated orderId
     const orderbook = (engine as any).orderbooks.find(
-      (orderbook: any) => orderbook.ticker() === "TATA_INR",
+      (orderbook: any) => orderbook.ticker() === "BTC_USDC",
     );
 
     const orderId = orderbook.bids[0].orderId;
@@ -754,7 +632,7 @@ describe("Engine", () => {
       message: {
         type: CANCEL_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           orderId,
           userId: "1",
         },
@@ -764,35 +642,23 @@ describe("Engine", () => {
 
     const afterCancelBalance = (engine as any).balances.get("1");
 
-    expect(afterCancelBalance.INR.available).toBe(10000);
-    expect(afterCancelBalance.INR.locked).toBe(0);
+    expect(afterCancelBalance.USDC.available).toBe(10000);
+    expect(afterCancelBalance.USDC.locked).toBe(0);
 
     expect(orderbook.bids.length).toBe(0);
   });
 
-  it("Refunds only remaining locked INR after partially filled buy is cancelled", async () => {
+  it("Refunds only remaining locked USDC after partially filled buy is cancelled", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // Buyer places BUY 5 @1000
@@ -800,7 +666,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "5",
           side: "buy",
@@ -815,7 +681,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "sell",
@@ -826,7 +692,7 @@ describe("Engine", () => {
     });
 
     const orderbook = (engine as any).orderbooks.find(
-      (orderbook: any) => orderbook.ticker() === "TATA_INR",
+      (orderbook: any) => orderbook.ticker() === "BTC_USDC",
     );
 
     const remainingBuyOrder = orderbook.bids.find(
@@ -837,15 +703,15 @@ describe("Engine", () => {
 
     const beforeCancel = (engine as any).balances.get("1");
 
-    expect(beforeCancel.INR.available).toBe(5000);
-    expect(beforeCancel.INR.locked).toBe(3000);
-    expect(beforeCancel.TATA.available).toBe(2);
+    expect(beforeCancel.USDC.available).toBe(5000);
+    expect(beforeCancel.USDC.locked).toBe(3000);
+    expect(beforeCancel.BTC.available).toBe(2);
 
     await engine.process({
       message: {
         type: CANCEL_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           orderId: remainingBuyOrder.orderId,
           userId: "1",
         },
@@ -855,36 +721,24 @@ describe("Engine", () => {
 
     const afterCancel = (engine as any).balances.get("1");
 
-    expect(afterCancel.INR.available).toBe(8000);
-    expect(afterCancel.INR.locked).toBe(0);
-    expect(afterCancel.TATA.available).toBe(2);
+    expect(afterCancel.USDC.available).toBe(8000);
+    expect(afterCancel.USDC.locked).toBe(0);
+    expect(afterCancel.BTC.available).toBe(2);
 
     expect(orderbook.bids.length).toBe(0);
   });
 
-  it("Refunds only remaining locked TATA after partially filled sell is cancelled", async () => {
+  it("Refunds only remaining locked BTC after partially filled sell is cancelled", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // Seller places SELL 5
@@ -892,7 +746,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "5",
           side: "sell",
@@ -907,7 +761,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "buy",
@@ -918,7 +772,7 @@ describe("Engine", () => {
     });
 
     const orderbook = (engine as any).orderbooks.find(
-      (orderbook: any) => orderbook.ticker() === "TATA_INR",
+      (orderbook: any) => orderbook.ticker() === "BTC_USDC",
     );
 
     const remainingSellOrder = orderbook.asks.find(
@@ -929,15 +783,15 @@ describe("Engine", () => {
 
     const beforeCancel = (engine as any).balances.get("2");
 
-    expect(beforeCancel.TATA.available).toBe(5);
-    expect(beforeCancel.TATA.locked).toBe(3);
-    expect(beforeCancel.INR.available).toBe(2000);
+    expect(beforeCancel.BTC.available).toBe(5);
+    expect(beforeCancel.BTC.locked).toBe(3);
+    expect(beforeCancel.USDC.available).toBe(2000);
 
     await engine.process({
       message: {
         type: CANCEL_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           orderId: remainingSellOrder.orderId,
           userId: "2",
         },
@@ -947,9 +801,9 @@ describe("Engine", () => {
 
     const afterCancel = (engine as any).balances.get("2");
 
-    expect(afterCancel.TATA.available).toBe(8);
-    expect(afterCancel.TATA.locked).toBe(0);
-    expect(afterCancel.INR.available).toBe(2000);
+    expect(afterCancel.BTC.available).toBe(8);
+    expect(afterCancel.BTC.locked).toBe(0);
+    expect(afterCancel.USDC.available).toBe(2000);
 
     expect(orderbook.asks.length).toBe(0);
   });
@@ -958,14 +812,8 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // User 1 places SELL first
@@ -973,7 +821,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "sell",
@@ -988,7 +836,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "buy",
@@ -1007,32 +855,26 @@ describe("Engine", () => {
     expect(tradeMessages.length).toBe(0);
 
     const orderbook = (engine as any).orderbooks.find(
-      (orderbook: any) => orderbook.ticker() === "TATA_INR",
+      (orderbook: any) => orderbook.ticker() === "BTC_USDC",
     );
 
     expect(orderbook.asks.length).toBe(1);
     expect(orderbook.bids.length).toBe(1);
   });
 
-  it("Rejects sell order when user has insufficient TATA balance", async () => {
+  it("Rejects sell order when user has insufficient BTC balance", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("2", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 1,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 1, locked: 0 },
     });
 
     await engine.process({
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "sell",
@@ -1056,26 +898,26 @@ describe("Engine", () => {
 
     const userBalance = (engine as any).balances.get("2");
 
-    expect(userBalance.TATA.available).toBe(1);
-    expect(userBalance.TATA.locked).toBe(0);
+    expect(userBalance.BTC.available).toBe(1);
+    expect(userBalance.BTC.locked).toBe(0);
   });
 
   it("Matches multiple maker orders in correct price order", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 0, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: { available: 0, locked: 0 },
-      TATA: { available: 10, locked: 0 },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     (engine as any).balances.set("3", {
-      INR: { available: 0, locked: 0 },
-      TATA: { available: 10, locked: 0 },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // Seller A
@@ -1083,7 +925,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "900",
           quantity: "1",
           side: "sell",
@@ -1098,7 +940,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "950",
           quantity: "2",
           side: "sell",
@@ -1113,7 +955,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "3",
           side: "buy",
@@ -1142,18 +984,18 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 0, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: { available: 0, locked: 0 },
-      TATA: { available: 10, locked: 0 },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     (engine as any).balances.set("3", {
-      INR: { available: 0, locked: 0 },
-      TATA: { available: 10, locked: 0 },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // Seller A arrives first
@@ -1161,7 +1003,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "sell",
@@ -1176,7 +1018,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "sell",
@@ -1191,7 +1033,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "3",
           side: "buy",
@@ -1222,13 +1064,13 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 0, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: { available: 0, locked: 0 },
-      TATA: { available: 10, locked: 0 },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // BUY rests
@@ -1236,7 +1078,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "1",
           side: "buy",
@@ -1251,7 +1093,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1001",
           quantity: "1",
           side: "sell",
@@ -1270,7 +1112,7 @@ describe("Engine", () => {
     expect(tradeMessages.length).toBe(0);
 
     const orderbook = (engine as any).orderbooks.find(
-      (orderbook: any) => orderbook.ticker() === "TATA_INR",
+      (orderbook: any) => orderbook.ticker() === "BTC_USDC",
     );
 
     expect(orderbook.bids.length).toBe(1);
@@ -1284,13 +1126,13 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 0, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: { available: 0, locked: 0 },
-      TATA: { available: 10, locked: 0 },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // Seller is maker
@@ -1298,7 +1140,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "900",
           quantity: "2",
           side: "sell",
@@ -1313,7 +1155,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "buy",
@@ -1345,13 +1187,13 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 0, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: { available: 0, locked: 0 },
-      TATA: { available: 10, locked: 0 },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // Buyer is maker
@@ -1359,7 +1201,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1100",
           quantity: "2",
           side: "buy",
@@ -1374,7 +1216,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "sell",
@@ -1406,17 +1248,17 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 0, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: { available: 0, locked: 0 },
-      TATA: { available: 10, locked: 2 },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 2 },
     });
 
     const orderbook = (engine as any).orderbooks.find(
-      (orderbook: any) => orderbook.ticker() === "TATA_INR",
+      (orderbook: any) => orderbook.ticker() === "BTC_USDC",
     );
 
     orderbook.asks.push({
@@ -1432,7 +1274,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "4",
           side: "buy",
@@ -1468,22 +1310,22 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 0, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: { available: 0, locked: 0 },
-      TATA: { available: 0, locked: 2 },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 0, locked: 2 },
     });
 
     (engine as any).balances.set("3", {
-      INR: { available: 0, locked: 0 },
-      TATA: { available: 0, locked: 4 },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 0, locked: 4 },
     });
 
     const orderbook = (engine as any).orderbooks.find(
-      (orderbook: any) => orderbook.ticker() === "TATA_INR",
+      (orderbook: any) => orderbook.ticker() === "BTC_USDC",
     );
 
     // Maker A: 5 total, already filled 3 → remaining 2
@@ -1511,7 +1353,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "5",
           side: "buy",
@@ -1562,13 +1404,13 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 0, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 0, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     // User 1 creates BUY
@@ -1576,7 +1418,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "2",
           side: "buy",
@@ -1587,7 +1429,7 @@ describe("Engine", () => {
     });
 
     const orderbook = (engine as any).orderbooks.find(
-      (orderbook: any) => orderbook.ticker() === "TATA_INR",
+      (orderbook: any) => orderbook.ticker() === "BTC_USDC",
     );
 
     const orderId = orderbook.bids[0].orderId;
@@ -1597,7 +1439,7 @@ describe("Engine", () => {
       message: {
         type: CANCEL_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           orderId,
           userId: "2",
         },
@@ -1612,23 +1454,23 @@ describe("Engine", () => {
     // User 1's locked money must remain locked
     const user1Balance = (engine as any).balances.get("1");
 
-    expect(user1Balance.INR.available).toBe(8000);
-    expect(user1Balance.INR.locked).toBe(2000);
+    expect(user1Balance.USDC.available).toBe(8000);
+    expect(user1Balance.USDC.locked).toBe(2000);
   });
 
   it("Does not cancel a non-existent order", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 0, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     await engine.process({
       message: {
         type: CANCEL_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           orderId: "does-not-exist",
           userId: "1",
         },
@@ -1638,11 +1480,11 @@ describe("Engine", () => {
 
     const userBalance = (engine as any).balances.get("1");
 
-    expect(userBalance.INR.available).toBe(10000);
-    expect(userBalance.INR.locked).toBe(0);
+    expect(userBalance.USDC.available).toBe(10000);
+    expect(userBalance.USDC.locked).toBe(0);
 
     const orderbook = (engine as any).orderbooks.find(
-      (orderbook: any) => orderbook.ticker() === "TATA_INR",
+      (orderbook: any) => orderbook.ticker() === "BTC_USDC",
     );
 
     expect(orderbook.bids.length).toBe(0);
@@ -1653,14 +1495,8 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 2000,
-      },
-      TATA: {
-        available: 5,
-        locked: 1,
-      },
+      USDC: { available: 10000, locked: 2000 },
+      BTC: { available: 5, locked: 1 },
     });
 
     await engine.process({
@@ -1676,14 +1512,8 @@ describe("Engine", () => {
     expect(sendToApiMock).toHaveBeenCalledWith("client-1", {
       type: "BALANCE",
       payload: {
-        INR: {
-          available: 10000,
-          locked: 2000,
-        },
-        TATA: {
-          available: 5,
-          locked: 1,
-        },
+        USDC: { available: 10000, locked: 2000 },
+        BTC: { available: 5, locked: 1 },
       },
     });
   });
@@ -1692,13 +1522,13 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 10, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 10, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // User 1 BUY
@@ -1706,7 +1536,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "900",
           quantity: "2",
           side: "buy",
@@ -1721,7 +1551,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1100",
           quantity: "3",
           side: "sell",
@@ -1738,7 +1568,7 @@ describe("Engine", () => {
       message: {
         type: GET_OPEN_ORDERS,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           userId: "1",
         },
       },
@@ -1765,13 +1595,13 @@ describe("Engine", () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 10, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     (engine as any).balances.set("2", {
-      INR: { available: 10000, locked: 0 },
-      TATA: { available: 10, locked: 0 },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // BUY rests
@@ -1779,7 +1609,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "900",
           quantity: "2",
           side: "buy",
@@ -1794,7 +1624,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1100",
           quantity: "3",
           side: "sell",
@@ -1810,7 +1640,7 @@ describe("Engine", () => {
       message: {
         type: GET_DEPTH,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
         },
       },
       clientId: "client-1",
@@ -1835,7 +1665,7 @@ describe("Engine", () => {
         type: ON_RAMP,
         data: {
           userId: "99",
-          asset: "INR",
+          asset: "USDC",
           amount: "5000",
           txnId: "txn-test-1",
         },
@@ -1845,31 +1675,20 @@ describe("Engine", () => {
 
     const userBalance = (engine as any).balances.get("99");
 
-    expect(userBalance.INR.available).toBe(5000);
-    expect(userBalance.INR.locked).toBe(0);
+    expect(userBalance).toBeDefined();
 
-    expect(userBalance.USDC.available).toBe(10000);
-    expect(userBalance.TATA.available).toBe(100);
-    expect(userBalance.BTC.available).toBe(1);
-    expect(userBalance.ETH.available).toBe(10);
+    // On-ramped USDC
+    expect(userBalance.USDC.available).toBe(5000);
+    expect(userBalance.USDC.locked).toBe(0);
   });
 
-  it("Adds INR to an existing user on ramp", async () => {
+  it("Adds USDC to an existing user on ramp", async () => {
     const engine = createTestEngine();
 
     (engine as any).balances.set("1", {
-      INR: {
-        available: 1000,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 2,
-      },
-      BTC: {
-        available: 1,
-        locked: 0,
-      },
+      USDC: { available: 1000, locked: 0 },
+      BTC: { available: 10, locked: 2 },
+      ETH: { available: 1, locked: 0 },
     });
 
     await engine.process({
@@ -1877,7 +1696,7 @@ describe("Engine", () => {
         type: ON_RAMP,
         data: {
           userId: "1",
-          asset: "INR",
+          asset: "USDC",
           amount: "500",
           txnId: "txn-1",
         },
@@ -1887,13 +1706,14 @@ describe("Engine", () => {
 
     const userBalance = (engine as any).balances.get("1");
 
-    expect(userBalance.INR.available).toBe(1500);
-    expect(userBalance.INR.locked).toBe(0);
+    // USDC increased by the on-ramp amount
+    expect(userBalance.USDC.available).toBe(1500);
+    expect(userBalance.USDC.locked).toBe(0);
 
-    expect(userBalance.TATA.available).toBe(10);
-    expect(userBalance.TATA.locked).toBe(2);
-
-    expect(userBalance.BTC.available).toBe(1);
+    // Other balances untouched
+    expect(userBalance.BTC.available).toBe(10);
+    expect(userBalance.BTC.locked).toBe(2);
+    expect(userBalance.ETH.available).toBe(1);
   });
 
   it("Returns empty depth for invalid market", async () => {
@@ -1923,26 +1743,14 @@ describe("Engine", () => {
 
     // Buyer
     (engine as any).balances.set("1", {
-      INR: {
-        available: 10000,
-        locked: 0,
-      },
-      TATA: {
-        available: 0,
-        locked: 0,
-      },
+      USDC: { available: 10000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
     });
 
     // Seller
     (engine as any).balances.set("2", {
-      INR: {
-        available: 0,
-        locked: 0,
-      },
-      TATA: {
-        available: 10,
-        locked: 0,
-      },
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 10, locked: 0 },
     });
 
     // ----------------------------------
@@ -1953,7 +1761,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "1",
           side: "sell",
@@ -1975,7 +1783,7 @@ describe("Engine", () => {
       message: {
         type: CREATE_ORDER,
         data: {
-          market: "TATA_INR",
+          market: "BTC_USDC",
           price: "1000",
           quantity: "1",
           side: "buy",
@@ -1994,6 +1802,364 @@ describe("Engine", () => {
         data: expect.objectContaining({
           e: "order_update",
           filled: 1,
+          status: "FILLED",
+        }),
+      }),
+    );
+  });
+  it("Market BUY uses actual ask prices and updates balances", async () => {
+    const engine = createTestEngine();
+
+    // Buyer
+    (engine as any).balances.set("1", {
+      USDC: { available: 100000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
+    });
+
+    // Seller 1
+    (engine as any).balances.set("2", {
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 1, locked: 0 },
+    });
+
+    // Seller 2
+    (engine as any).balances.set("3", {
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 1, locked: 0 },
+    });
+
+    // LIMIT SELL: 0.2 BTC @ 60000
+    await engine.process({
+      message: {
+        type: CREATE_ORDER,
+        data: {
+          market: "BTC_USDC",
+          price: "60000",
+          quantity: "0.2",
+          side: "sell",
+          orderType: "limit",
+          userId: "2",
+        },
+      },
+      clientId: "client-2",
+    });
+
+    // LIMIT SELL: 0.3 BTC @ 60100
+    await engine.process({
+      message: {
+        type: CREATE_ORDER,
+        data: {
+          market: "BTC_USDC",
+          price: "60100",
+          quantity: "0.3",
+          side: "sell",
+          orderType: "limit",
+          userId: "3",
+        },
+      },
+      clientId: "client-3",
+    });
+
+    // MARKET BUY 0.4 BTC
+    await engine.process({
+      message: {
+        type: CREATE_ORDER,
+        data: {
+          market: "BTC_USDC",
+          quantity: "0.4",
+          side: "buy",
+          orderType: "market",
+          userId: "1",
+        },
+      },
+      clientId: "client-1",
+    });
+
+    const buyer = (engine as any).balances.get("1");
+    const seller1 = (engine as any).balances.get("2");
+    const seller2 = (engine as any).balances.get("3");
+
+    /*
+    Buyer consumes:
+
+    0.2 × 60000 = 12000
+    0.2 × 60100 = 12020
+
+    Total spent = 24020
+  */
+
+    expect(buyer.USDC.available).toBeCloseTo(75980);
+    expect(buyer.USDC.locked).toBeCloseTo(0);
+    expect(buyer.BTC.available).toBeCloseTo(0.4);
+
+    expect(seller1.USDC.available).toBeCloseTo(12000);
+    expect(seller1.BTC.available).toBeCloseTo(0.8);
+    expect(seller1.BTC.locked).toBeCloseTo(0);
+
+    expect(seller2.USDC.available).toBeCloseTo(12020);
+    expect(seller2.BTC.available).toBeCloseTo(0.7);
+    expect(seller2.BTC.locked).toBeCloseTo(0.1);
+
+    const orderbook = (engine as any).orderbooks.find(
+      (orderbook: any) => orderbook.ticker() === "BTC_USDC",
+    );
+
+    // Market BUY itself must never rest in bids.
+    expect(orderbook.bids.some((order: any) => order.userId === "1")).toBe(
+      false,
+    );
+
+    // First ask fully consumed.
+    // Second ask has 0.1 remaining.
+    expect(orderbook.asks.length).toBe(1);
+
+    expect(orderbook.asks[0].userId).toBe("3");
+
+    expect(orderbook.asks[0].quantity - orderbook.asks[0].filled).toBeCloseTo(
+      0.1,
+    );
+  });
+
+  it("Partial Market BUY cancels unfilled remainder", async () => {
+    const engine = createTestEngine();
+
+    (engine as any).balances.set("1", {
+      USDC: { available: 100000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
+    });
+
+    (engine as any).balances.set("2", {
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 0.2, locked: 0 },
+    });
+
+    // Only 0.2 BTC exists for sale.
+    await engine.process({
+      message: {
+        type: CREATE_ORDER,
+        data: {
+          market: "BTC_USDC",
+          price: "60000",
+          quantity: "0.2",
+          side: "sell",
+          orderType: "limit",
+          userId: "2",
+        },
+      },
+      clientId: "client-2",
+    });
+
+    // Ignore maker's WS messages.
+    publishMessageMock.mockClear();
+
+    // Buyer wants 1 BTC, but only 0.2 exists.
+    await engine.process({
+      message: {
+        type: CREATE_ORDER,
+        data: {
+          market: "BTC_USDC",
+          quantity: "1",
+          side: "buy",
+          orderType: "market",
+          userId: "1",
+        },
+      },
+      clientId: "client-1",
+    });
+
+    const buyer = (engine as any).balances.get("1");
+
+    /*
+    Executed:
+
+    0.2 × 60000 = 12000
+  */
+
+    expect(buyer.BTC.available).toBeCloseTo(0.2);
+
+    expect(buyer.USDC.available).toBeCloseTo(88000);
+
+    expect(buyer.USDC.locked).toBeCloseTo(0);
+
+    const orderbook = (engine as any).orderbooks.find(
+      (orderbook: any) => orderbook.ticker() === "BTC_USDC",
+    );
+
+    // Remaining 0.8 BTC must NOT become an open bid.
+    expect(orderbook.bids.some((order: any) => order.userId === "1")).toBe(
+      false,
+    );
+
+    // Partial market order is terminal in our 4-status model.
+    expect(publishMessageMock).toHaveBeenCalledWith(
+      "user_trades@1",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          e: "order_update",
+          filled: 0.2,
+          status: "CANCELLED",
+        }),
+      }),
+    );
+  });
+
+  it("Partial Market SELL refunds unfilled BTC", async () => {
+    const engine = createTestEngine();
+
+    // Buyer
+    (engine as any).balances.set("1", {
+      USDC: { available: 100000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
+    });
+
+    // Seller
+    (engine as any).balances.set("2", {
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 1, locked: 0 },
+    });
+
+    // Buyer places LIMIT BUY 0.2 @ 60000
+    await engine.process({
+      message: {
+        type: CREATE_ORDER,
+        data: {
+          market: "BTC_USDC",
+          price: "60000",
+          quantity: "0.2",
+          side: "buy",
+          orderType: "limit",
+          userId: "1",
+        },
+      },
+      clientId: "client-1",
+    });
+
+    publishMessageMock.mockClear();
+
+    // Seller wants to MARKET SELL 1 BTC.
+    // Only 0.2 BTC can execute.
+    await engine.process({
+      message: {
+        type: CREATE_ORDER,
+        data: {
+          market: "BTC_USDC",
+          quantity: "1",
+          side: "sell",
+          orderType: "market",
+          userId: "2",
+        },
+      },
+      clientId: "client-2",
+    });
+
+    const buyer = (engine as any).balances.get("1");
+    const seller = (engine as any).balances.get("2");
+
+    /*
+    Executed:
+
+    0.2 × 60000 = 12000
+  */
+
+    expect(buyer.USDC.available).toBeCloseTo(88000);
+
+    expect(buyer.USDC.locked).toBeCloseTo(0);
+
+    expect(buyer.BTC.available).toBeCloseTo(0.2);
+
+    // Seller requested 1 BTC.
+    // Only 0.2 sold.
+    // Remaining 0.8 returned to available.
+    expect(seller.BTC.available).toBeCloseTo(0.8);
+    expect(seller.BTC.locked).toBeCloseTo(0);
+
+    expect(seller.USDC.available).toBeCloseTo(12000);
+
+    const orderbook = (engine as any).orderbooks.find(
+      (orderbook: any) => orderbook.ticker() === "BTC_USDC",
+    );
+
+    // Market SELL remainder must not rest as an ask.
+    expect(orderbook.asks.some((order: any) => order.userId === "2")).toBe(
+      false,
+    );
+
+    expect(publishMessageMock).toHaveBeenCalledWith(
+      "user_trades@2",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          e: "order_update",
+          filled: 0.2,
+          status: "CANCELLED",
+        }),
+      }),
+    );
+  });
+
+  it("Fully filled Market BUY publishes FILLED", async () => {
+    const engine = createTestEngine();
+
+    (engine as any).balances.set("1", {
+      USDC: { available: 100000, locked: 0 },
+      BTC: { available: 0, locked: 0 },
+    });
+
+    (engine as any).balances.set("2", {
+      USDC: { available: 0, locked: 0 },
+      BTC: { available: 1, locked: 0 },
+    });
+
+    // Maker provides exactly 0.5 BTC.
+    await engine.process({
+      message: {
+        type: CREATE_ORDER,
+        data: {
+          market: "BTC_USDC",
+          price: "60000",
+          quantity: "0.5",
+          side: "sell",
+          orderType: "limit",
+          userId: "2",
+        },
+      },
+      clientId: "client-2",
+    });
+
+    publishMessageMock.mockClear();
+
+    // Taker buys exactly available liquidity.
+    await engine.process({
+      message: {
+        type: CREATE_ORDER,
+        data: {
+          market: "BTC_USDC",
+          quantity: "0.5",
+          side: "buy",
+          orderType: "market",
+          userId: "1",
+        },
+      },
+      clientId: "client-1",
+    });
+
+    const buyer = (engine as any).balances.get("1");
+
+    /*
+    0.5 × 60000 = 30000
+  */
+
+    expect(buyer.USDC.available).toBeCloseTo(70000);
+
+    expect(buyer.USDC.locked).toBeCloseTo(0);
+
+    expect(buyer.BTC.available).toBeCloseTo(0.5);
+
+    expect(publishMessageMock).toHaveBeenCalledWith(
+      "user_trades@1",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          e: "order_update",
+          filled: 0.5,
           status: "FILLED",
         }),
       }),
