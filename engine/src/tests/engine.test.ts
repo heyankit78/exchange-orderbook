@@ -2165,4 +2165,67 @@ describe("Engine", () => {
       }),
     );
   });
+
+  it("Publishes depth updates with canonical price keys for resting limit orders", async () => {
+    const engine = createTestEngine();
+
+    (engine as any).balances.set("1", {
+      USDC: { available: 100000, locked: 0 },
+      BTC: { available: 1, locked: 0 },
+    });
+
+    publishMessageMock.mockClear();
+
+    await engine.process({
+      message: {
+        type: CREATE_ORDER,
+        data: {
+          market: "BTC_USDC",
+          price: "60000.00",
+          quantity: "0.5",
+          side: "buy",
+          userId: "1",
+        },
+      },
+      clientId: "client-1",
+    });
+
+    expect(publishMessageMock).toHaveBeenCalledWith(
+      "depth@BTC_USDC",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          e: "depth",
+          b: [["60000", "0.5"]],
+          a: [["60000", "0"]],
+        }),
+      }),
+    );
+
+    publishMessageMock.mockClear();
+
+    await engine.process({
+      message: {
+        type: CREATE_ORDER,
+        data: {
+          market: "BTC_USDC",
+          price: "60100.50",
+          quantity: "0.25",
+          side: "sell",
+          userId: "1",
+        },
+      },
+      clientId: "client-1",
+    });
+
+    expect(publishMessageMock).toHaveBeenCalledWith(
+      "depth@BTC_USDC",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          e: "depth",
+          a: [["60100.5", "0.25"]],
+          b: [["60100.5", "0"]],
+        }),
+      }),
+    );
+  });
 });

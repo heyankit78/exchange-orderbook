@@ -68,7 +68,7 @@ export class User {
   }
 
   private addListeners() {
-    this.ws.on("message", (message) => {
+    this.ws.on("message", async (message) => {
       let parsedMessage: unknown;
 
       // 1. PARSE JSON SAFELY
@@ -116,10 +116,8 @@ export class User {
       // =====================================
       // SUBSCRIBE
       // =====================================
-
       if (parsedMessage.method === SUBSCRIBE) {
-        parsedMessage.params.forEach((subscription) => {
-          // PRIVATE CHANNEL
+        for (const subscription of parsedMessage.params) {
           if (subscription.startsWith("user_trades@")) {
             const requestedUserId = subscription.split("@")[1];
 
@@ -129,30 +127,37 @@ export class User {
             ) {
               console.log("Unauthorized private subscription:", subscription);
 
-              return;
+              continue;
             }
           }
 
-          SubscriptionManager.getInstance().subscribe(
-            this.connectionId,
-            subscription,
-          );
-        });
+          try {
+            await SubscriptionManager.getInstance().subscribe(
+              this.connectionId,
+              subscription,
+            );
+          } catch (error) {
+            console.error("❌ Subscription failed:", subscription, error);
+          }
+        }
 
         return;
       }
-
       // =====================================
       // UNSUBSCRIBE
       // =====================================
 
       if (parsedMessage.method === UNSUBSCRIBE) {
-        parsedMessage.params.forEach((subscription) => {
-          SubscriptionManager.getInstance().unsubscribe(
-            this.connectionId,
-            subscription,
-          );
-        });
+        for (const subscription of parsedMessage.params) {
+          try {
+            await SubscriptionManager.getInstance().unsubscribe(
+              this.connectionId,
+              subscription,
+            );
+          } catch (error) {
+            console.error("❌ Unsubscribe failed:", subscription, error);
+          }
+        }
       }
     });
   }

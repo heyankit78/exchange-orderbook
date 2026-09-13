@@ -12,7 +12,7 @@ import {
   ON_RAMP,
 } from "@repo/shared";
 import { Fill, Order } from "@repo/shared";
-import { Orderbook } from "./Orderbook";
+import { depthPriceKey, Orderbook } from "./Orderbook";
 
 export const BASE_CURRENCY = "INR";
 
@@ -969,6 +969,7 @@ export class Engine {
         quantity: order.quantity.toString(),
         side: order.side,
         orderType: orderType.toUpperCase() as "LIMIT" | "MARKET",
+        status,
       },
     });
     for (const fill of fills) {
@@ -1031,13 +1032,14 @@ export class Engine {
     const ob = this.orderbooks.find((o) => o.ticker() === market);
     if (!ob) return;
     const depth = ob.getDepth();
-    const updatedBids = depth.bids.filter((x) => x[0] === price);
-    const updatedAsks = depth.asks.filter((x) => x[0] === price);
+    const priceKey = depthPriceKey(price);
+    const updatedBids = depth.bids.filter((x) => x[0] === priceKey);
+    const updatedAsks = depth.asks.filter((x) => x[0] === priceKey);
     RedisManager.getInstance().publishMessage(`depth@${market}`, {
       stream: `depth@${market}`,
       data: {
-        a: updatedAsks.length ? updatedAsks : [[price, "0"]],
-        b: updatedBids.length ? updatedBids : [[price, "0"]],
+        a: updatedAsks.length ? updatedAsks : [[priceKey, "0"]],
+        b: updatedBids.length ? updatedBids : [[priceKey, "0"]],
         e: "depth",
       },
     });
@@ -1053,8 +1055,8 @@ export class Engine {
     if (!ob) return;
     const depth = ob.getDepth();
     const affectedPrices = new Set<string>([
-      price,
-      ...fills.map((f) => f.price),
+      depthPriceKey(price),
+      ...fills.map((f) => depthPriceKey(f.price)),
     ]);
     const bidUpdates: [string, string][] = [];
     const askUpdates: [string, string][] = [];

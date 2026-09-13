@@ -21,6 +21,15 @@ export interface Fill {
   makerOrderQuantity: number;
 }
 
+/** Same string the book uses as a depth price key (`60000.00` → `60000`). */
+export function depthPriceKey(price: string | number): string {
+  const value = Number(price);
+  if (!Number.isFinite(value)) {
+    return String(price);
+  }
+  return String(value);
+}
+
 export class Orderbook {
   bids: Order[];
   asks: Order[];
@@ -288,26 +297,22 @@ export class Orderbook {
 
     for (let i = 0; i < this.bids.length; i++) {
       const order = this.bids[i];
-      console.log("BID IN ENGINE:", {
-        orderId: order.orderId,
-        price: order.price,
-        quantity: order.quantity,
-        filled: order.filled,
-        remaining: order.quantity - order.filled,
-        userId: order.userId,
-      });
-      if (!bidsObj[order.price]) {
-        bidsObj[order.price] = 0;
+      const remaining = order.quantity - order.filled;
+      if (remaining <= 0) {
+        continue;
       }
-      bidsObj[order.price] += order.quantity - order.filled;
+      const key = depthPriceKey(order.price);
+      bidsObj[key] = (bidsObj[key] || 0) + remaining;
     }
 
     for (let i = 0; i < this.asks.length; i++) {
       const order = this.asks[i];
-      if (!asksObj[order.price]) {
-        asksObj[order.price] = 0;
+      const remaining = order.quantity - order.filled;
+      if (remaining <= 0) {
+        continue;
       }
-      asksObj[order.price] += order.quantity - order.filled;
+      const key = depthPriceKey(order.price);
+      asksObj[key] = (asksObj[key] || 0) + remaining;
     }
 
     for (const price in bidsObj) {

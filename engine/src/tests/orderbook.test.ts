@@ -742,4 +742,37 @@ describe("Precision errors are taken care of", () => {
     expect(orderbook.bids.length).toBe(0);
     expect(orderbook.asks.length).toBe(1);
   });
+
+  it("getDepth uses canonical price keys so 60000.00 matches 60000", () => {
+    const orderbook = new Orderbook(
+      "BTC",
+      "USDC",
+      [
+        {
+          price: 60000,
+          quantity: 1,
+          orderId: "1",
+          filled: 0,
+          side: "buy" as const,
+          userId: "1",
+        },
+      ],
+      [
+        {
+          price: 60000.5,
+          quantity: 2,
+          orderId: "2",
+          filled: 0,
+          side: "sell" as const,
+          userId: "2",
+        },
+      ],
+      0,
+    );
+
+    expect(orderbook.getDepth()).toEqual({
+      bids: [["60000", "1"]],
+      asks: [["60000.5", "2"]],
+    });
+  });
 });

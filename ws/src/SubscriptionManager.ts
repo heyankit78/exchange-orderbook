@@ -3,83 +3,149 @@ import { UserManager } from "./UserManager";
 
 export class SubscriptionManager {
   private static instance: SubscriptionManager;
+
   private subscriptions: Map<string, string[]> = new Map();
   private reverseSubscriptions: Map<string, string[]> = new Map();
+
   private redisClient: RedisClientType;
+
+  // IMPORTANT:
+  // everybody waits for the SAME Redis connection
+  private redisReady: Promise<void>;
 
   private constructor() {
     this.redisClient = createClient();
-    this.redisClient.connect();
+
+    this.redisClient.on("error", (error) => {
+      console.error("❌ WS Redis error:", error);
+    });
+
+    this.redisReady = this.redisClient.connect().then(() => {
+      console.log("✅ WS Redis subscriber connected");
+    });
   }
 
   public static getInstance() {
     if (!this.instance) {
       this.instance = new SubscriptionManager();
     }
+
     return this.instance;
   }
-  public subscribe(connectionId: string, subscription: string) {
+
+  public async subscribe(connectionId: string, subscription: string) {
+    // ----------------------------------------
+    // already subscribed by this websocket
+    // ----------------------------------------
     if (this.subscriptions.get(connectionId)?.includes(subscription)) {
       return;
     }
 
-    // subscriptions map
-    // connection1 -> ["depth@btc", "trade@btc"]
-    // connection2 -> ["depth@btc"]
-    this.subscriptions.set(
-      connectionId,
-      (this.subscriptions.get(connectionId) || []).concat(subscription),
-    );
+    // ----------------------------------------
+    // WAIT UNTIL REDIS IS REALLY CONNECTED
+    // ----------------------------------------
+    await this.redisReady;
 
-    // reverseSubscriptions map
-    // "depth@btc" -> ["connection1", "connection2"]
-    this.reverseSubscriptions.set(
-      subscription,
-      (this.reverseSubscriptions.get(subscription) || []).concat(connectionId),
-    );
+    const existingConnections =
+      this.reverseSubscriptions.get(subscription) || [];
 
-    // If this is the FIRST local connection interested in depth@btc,
-    // subscribe this WS server to Redis channel depth@btc.
-    if (this.reverseSubscriptions.get(subscription)?.length === 1) {
-      this.redisClient.subscribe(subscription, this.redisCallbackHandler);
+    const isFirstSubscriber = existingConnections.length === 0;
+
+    // ----------------------------------------
+    // IMPORTANT:
+    // subscribe Redis FIRST
+    // ----------------------------------------
+    if (isFirstSubscriber) {
+      console.log("📡 Redis subscribing:", subscription);
+
+      await this.redisClient.subscribe(subscription, this.redisCallbackHandler);
+
+      console.log("✅ Redis subscribed:", subscription);
     }
+
+    // ----------------------------------------
+    // only update our bookkeeping AFTER success
+    // ----------------------------------------
+    this.subscriptions.set(connectionId, [
+      ...(this.subscriptions.get(connectionId) || []),
+      subscription,
+    ]);
+
+    this.reverseSubscriptions.set(subscription, [
+      ...existingConnections,
+      connectionId,
+    ]);
+
+    console.log("✅ WS client subscribed:", {
+      connectionId,
+      subscription,
+    });
   }
 
   private redisCallbackHandler = (message: string, channel: string) => {
-    const parsedMessage = JSON.parse(message);
-    this.reverseSubscriptions
-      .get(channel)
-      ?.forEach((s) =>
-        UserManager.getInstance().getUser(s)?.emit(parsedMessage),
-      );
+    try {
+      const parsedMessage = JSON.parse(message);
+
+      console.log("🔥 REDIS PUBSUB RECEIVED:", channel);
+
+      this.reverseSubscriptions.get(channel)?.forEach((connectionId) => {
+        UserManager.getInstance().getUser(connectionId)?.emit(parsedMessage);
+      });
+    } catch (error) {
+      console.error("❌ Failed processing Redis PubSub message:", error);
+    }
   };
 
-  public unsubscribe(connectionId: string, subscription: string) {
-    const subscriptions = this.subscriptions.get(connectionId);
-    if (subscriptions) {
-      this.subscriptions.set(
-        connectionId,
-        subscriptions.filter((s) => s !== subscription),
-      );
+  public async unsubscribe(connectionId: string, subscription: string) {
+    await this.redisReady;
+
+    const connectionSubscriptions = this.subscriptions.get(connectionId);
+
+    if (!connectionSubscriptions?.includes(subscription)) {
+      return;
     }
-    const reverseSubscriptions = this.reverseSubscriptions.get(subscription);
-    if (reverseSubscriptions) {
-      this.reverseSubscriptions.set(
-        subscription,
-        reverseSubscriptions.filter((s) => s !== connectionId),
-      );
-      if (this.reverseSubscriptions.get(subscription)?.length === 0) {
-        this.reverseSubscriptions.delete(subscription);
-        this.redisClient.unsubscribe(subscription);
-      }
+
+    const updatedConnectionSubscriptions = connectionSubscriptions.filter(
+      (item) => item !== subscription,
+    );
+
+    if (updatedConnectionSubscriptions.length === 0) {
+      this.subscriptions.delete(connectionId);
+    } else {
+      this.subscriptions.set(connectionId, updatedConnectionSubscriptions);
+    }
+
+    const connections = this.reverseSubscriptions.get(subscription) || [];
+
+    const remainingConnections = connections.filter(
+      (item) => item !== connectionId,
+    );
+
+    if (remainingConnections.length === 0) {
+      this.reverseSubscriptions.delete(subscription);
+
+      console.log("📡 Redis unsubscribing:", subscription);
+
+      await this.redisClient.unsubscribe(subscription);
+
+      console.log("✅ Redis unsubscribed:", subscription);
+    } else {
+      this.reverseSubscriptions.set(subscription, remainingConnections);
     }
   }
 
-  public userLeft(connectionId: string) {
-    console.log("user connection left " + connectionId);
-    this.subscriptions
-      .get(connectionId)
-      ?.forEach((s) => this.unsubscribe(connectionId, s));
+  public async userLeft(connectionId: string) {
+    console.log("user connection left", connectionId);
+
+    const activeSubscriptions = [
+      ...(this.subscriptions.get(connectionId) || []),
+    ];
+
+    for (const subscription of activeSubscriptions) {
+      await this.unsubscribe(connectionId, subscription);
+    }
+
+    this.subscriptions.delete(connectionId);
   }
 
   getSubscriptions(connectionId: string) {

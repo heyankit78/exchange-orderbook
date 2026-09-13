@@ -413,12 +413,10 @@ export class SignalingManager {
   async registerCallback(type: string, callback: any, id: string) {
     this.callbacks[type] = this.callbacks[type] || [];
 
-    // Prevent same callback ID being registered twice
-    const alreadyExists = this.callbacks[type].some(
-      (item: any) => item.id === id,
-    );
+    const existing = this.callbacks[type].find((item: any) => item.id === id);
 
-    if (alreadyExists) {
+    if (existing) {
+      existing.callback = callback;
       return;
     }
 
