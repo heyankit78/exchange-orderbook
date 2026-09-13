@@ -1,6 +1,48 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
+const BACKEND_URL = "http://localhost:3000/api/v1";
+
+async function refreshAccessToken(token: any) {
+  try {
+    console.log("🔄 Refreshing backend access token");
+
+    const response = await fetch(`${BACKEND_URL}/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        refreshToken: token.refreshToken,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Refresh token failed");
+    }
+
+    const data = await response.json();
+
+    return {
+      ...token,
+
+      accessToken: data.accessToken,
+
+      // 15 minutes
+      accessTokenExpires: Date.now() + 15 * 60 * 1000,
+
+      error: undefined,
+    };
+  } catch (error) {
+    console.error("❌ Failed refreshing access token:", error);
+
+    return {
+      ...token,
+      error: "RefreshAccessTokenError",
+    };
+  }
+}
+
 const handler = NextAuth({
   providers: [
     CredentialsProvider({
@@ -11,6 +53,7 @@ const handler = NextAuth({
           label: "Email",
           type: "email",
         },
+
         password: {
           label: "Password",
           type: "password",
@@ -23,30 +66,38 @@ const handler = NextAuth({
         }
 
         try {
-          const res = await fetch("http://localhost:3000/api/v1/auth/login", {
+          const response = await fetch(`${BACKEND_URL}/auth/login`, {
             method: "POST",
+
             headers: {
               "Content-Type": "application/json",
             },
+
             body: JSON.stringify({
               email: credentials.email,
               password: credentials.password,
             }),
           });
 
-          if (!res.ok) {
+          if (!response.ok) {
             return null;
           }
 
-          const data = await res.json();
+          const data = await response.json();
 
           return {
             id: data.user.id,
             email: data.user.email,
             name: data.user.email,
-            accessToken: data.token,
+
+            accessToken: data.accessToken,
+            refreshToken: data.refreshToken,
+
+            accessTokenExpires: Date.now() + 15 * 60 * 1000,
           };
-        } catch {
+        } catch (error) {
+          console.error("Credentials login failed:", error);
+
           return null;
         }
       },
@@ -55,12 +106,28 @@ const handler = NextAuth({
 
   callbacks: {
     async jwt({ token, user }) {
+      // First login
       if (user) {
-        token.userId = user.id;
-        token.accessToken = (user as any).accessToken;
+        return {
+          ...token,
+
+          userId: user.id,
+
+          accessToken: (user as any).accessToken,
+
+          refreshToken: (user as any).refreshToken,
+
+          accessTokenExpires: (user as any).accessTokenExpires,
+        };
       }
 
-      return token;
+      // Access token still valid
+      if (Date.now() < Number(token.accessTokenExpires)) {
+        return token;
+      }
+
+      // Access token expired
+      return refreshAccessToken(token);
     },
 
     async session({ session, token }) {
@@ -69,6 +136,8 @@ const handler = NextAuth({
       }
 
       session.accessToken = token.accessToken as string;
+
+      (session as any).error = token.error;
 
       return session;
     },
@@ -82,13 +151,9 @@ const handler = NextAuth({
   session: {
     strategy: "jwt",
 
-    // 1 hour
-    maxAge: 60 * 60,
-  },
-
-  jwt: {
-    // also 1 hour
-    maxAge: 60 * 60,
+    // NextAuth session can stay alive
+    // independently of backend access token
+    maxAge: 30 * 24 * 60 * 60,
   },
 });
 

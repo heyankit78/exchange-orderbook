@@ -16,16 +16,9 @@ api.interceptors.response.use(
   (response) => response,
 
   async (error) => {
-    if (error.response?.status === 401) {
-      await signOut({
-        callbackUrl: "/login",
-      });
-    }
-
     return Promise.reject(error);
   },
 );
-
 export async function getOpenOrders(
   market: string,
   token: string,

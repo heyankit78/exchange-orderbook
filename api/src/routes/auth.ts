@@ -1,6 +1,5 @@
 import { Router } from "express";
 import jwt from "jsonwebtoken";
-const JWT_SECRET = "my-super-secret-key";
 import { Client } from "pg";
 import crypto from "crypto";
 import { RedisManager } from "../RedisManager";
@@ -21,6 +20,38 @@ function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password).digest("hex");
 }
 
+const JWT_SECRET = process.env.JWT_SECRET || "my-super-secret-key";
+
+const REFRESH_TOKEN_SECRET =
+  process.env.REFRESH_TOKEN_SECRET || "my-super-refresh-secret-key";
+
+function createAccessToken(user: { id: string | number; email: string }) {
+  return jwt.sign(
+    {
+      userId: String(user.id),
+      email: user.email,
+      type: "access",
+    },
+    JWT_SECRET,
+    {
+      expiresIn: "15m",
+    },
+  );
+}
+
+function createRefreshToken(user: { id: string | number; email: string }) {
+  return jwt.sign(
+    {
+      userId: String(user.id),
+      email: user.email,
+      type: "refresh",
+    },
+    REFRESH_TOKEN_SECRET,
+    {
+      expiresIn: "30d",
+    },
+  );
+}
 authRouter.post("/register", async (req, res) => {
   const { email, password } = req.body;
 
@@ -54,21 +85,26 @@ authRouter.post("/register", async (req, res) => {
     });
 
     console.log(`User registered: ${email} (id: ${userId})`);
-    const token = jwt.sign(
-      {
-        userId,
-        email: user.email,
-      },
-      JWT_SECRET,
-      {
-        expiresIn: "1h",
-      },
-    );
+    // const token = jwt.sign(
+    //   {
+    //     userId,
+    //     email: user.email,
+    //   },
+    //   JWT_SECRET,
+    //   {
+    //     expiresIn: "1h",
+    //   },
+    // );
+
+    const accessToken = createAccessToken(user);
+    const refreshToken = createRefreshToken(user);
 
     return res.json({
-      token,
+      accessToken,
+      refreshToken,
+
       user: {
-        id: userId,
+        id: String(user.id),
         email: user.email,
       },
     });
@@ -80,7 +116,49 @@ authRouter.post("/register", async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 });
+authRouter.post("/refresh", async (req, res) => {
+  const { refreshToken } = req.body;
 
+  if (!refreshToken) {
+    return res.status(401).json({
+      message: "Refresh token required",
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET) as {
+      userId: string;
+      email: string;
+      type: string;
+    };
+
+    if (decoded.type !== "refresh") {
+      return res.status(401).json({
+        message: "Invalid refresh token",
+      });
+    }
+
+    const newAccessToken = jwt.sign(
+      {
+        userId: decoded.userId,
+        email: decoded.email,
+        type: "access",
+      },
+      JWT_SECRET,
+      {
+        expiresIn: "15m",
+      },
+    );
+
+    return res.json({
+      accessToken: newAccessToken,
+    });
+  } catch (error) {
+    return res.status(401).json({
+      message: "Invalid or expired refresh token",
+    });
+  }
+});
 authRouter.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -102,21 +180,23 @@ authRouter.post("/login", async (req, res) => {
     const user = result.rows[0];
     console.log(`User logged in: ${email} (id: ${user.id})`);
 
-    const token = jwt.sign(
-      {
-        userId: String(user.id),
-        email: user.email,
-      },
-      JWT_SECRET,
-      {
-        expiresIn: "1h",
-      },
-    );
-
+    // const token = jwt.sign(
+    //   {
+    //     userId: String(user.id),
+    //     email: user.email,
+    //   },
+    //   JWT_SECRET,
+    //   {
+    //     expiresIn: "1h",
+    //   },
+    // );
+    const accessToken = createAccessToken(user);
+    const refreshToken = createRefreshToken(user);
     console.log(`User logged in: ${email} (id: ${user.id})`);
-
     return res.json({
-      token,
+      accessToken,
+      refreshToken,
+
       user: {
         id: String(user.id),
         email: user.email,
