@@ -275,28 +275,50 @@ export function SwapUI({
       );
 
       const executedQuantity = Number(response.executedQuantity);
+      const orderQuantity = Number(quantity);
 
       const status: OrderHistoryItem["status"] =
-        executedQuantity >= Number(quantity)
-          ? "FILLED"
-          : executedQuantity > 0
-            ? "PARTIALLY_FILLED"
-            : "OPEN";
+        type === "market"
+          ? executedQuantity >= orderQuantity
+            ? "FILLED"
+            : "CANCELLED"
+          : executedQuantity >= orderQuantity
+            ? "FILLED"
+            : executedQuantity > 0
+              ? "PARTIALLY_FILLED"
+              : "OPEN";
 
-      // const newOrder: OrderHistoryItem = {
-      //   orderId: response.orderId,
-      //   market,
-      //   side: activeTab,
-      //   price,
-      //   quantity,
-      //   filled: String(executedQuantity),
-      //   status,
-      // };
+      // remember latest known status
+      latestOrderStatusRef.current.set(response.orderId, status as OrderStatus);
 
-      // setOrderHistory((prev) => [
-      //   newOrder,
-      //   ...prev.filter((order) => order.orderId !== response.orderId),
-      // ]);
+      // ----------------------------------------
+      // INSTANT TERMINAL ORDER HISTORY
+      // ----------------------------------------
+
+      if (status === "FILLED" || status === "CANCELLED") {
+        const historyOrder: OrderHistoryItem = {
+          orderId: response.orderId,
+          market,
+          side: activeTab,
+
+          price:
+            type === "market"
+              ? response.fills?.[0]?.price
+                ? String(response.fills[0].price)
+                : "0"
+              : price,
+
+          quantity: String(orderQuantity),
+          filled: String(executedQuantity),
+          remaining: String(Math.max(0, orderQuantity - executedQuantity)),
+          status,
+        };
+
+        setOrderHistory((prev) => [
+          historyOrder,
+          ...prev.filter((order) => order.orderId !== response.orderId),
+        ]);
+      }
 
       await Promise.all([fetchBalance(), fetchOpenOrders()]);
 

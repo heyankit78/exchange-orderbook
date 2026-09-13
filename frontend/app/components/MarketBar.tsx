@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import type { Ticker } from "../utils/types";
 import { getTicker } from "../utils/httpClient";
@@ -8,42 +9,70 @@ export const MarketBar = ({ market }: { market: string }) => {
   const [ticker, setTicker] = useState<Ticker | null>(null);
 
   useEffect(() => {
-    getTicker(market).then(setTicker);
-    SignalingManager.getInstance().registerCallback(
-      "ticker",
-      (data: Partial<Ticker>) =>
-        setTicker((prevTicker) => ({
-          firstPrice: data?.firstPrice ?? prevTicker?.firstPrice ?? "",
-          high: data?.high ?? prevTicker?.high ?? "",
-          lastPrice: data?.lastPrice ?? prevTicker?.lastPrice ?? "",
-          low: data?.low ?? prevTicker?.low ?? "",
-          priceChange: data?.priceChange ?? prevTicker?.priceChange ?? "",
-          priceChangePercent:
-            data?.priceChangePercent ?? prevTicker?.priceChangePercent ?? "",
-          quoteVolume: data?.quoteVolume ?? prevTicker?.quoteVolume ?? "",
-          symbol: data?.symbol ?? prevTicker?.symbol ?? "",
-          trades: data?.trades ?? prevTicker?.trades ?? "",
-          volume: data?.volume ?? prevTicker?.volume ?? "",
-        })),
-      `TICKER-${market}`,
-    );
-    SignalingManager.getInstance().sendMessage({
+    let cancelled = false;
+
+    const signaling = SignalingManager.getInstance();
+
+    // Initial REST snapshot
+    getTicker(market)
+      .then((data) => {
+        if (!cancelled) {
+          setTicker(data);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load ticker:", error);
+      });
+
+    // Live trade callback
+    const callbackId = `MARKET-BAR-TRADE-${market}`;
+
+    const handleTrade = (trade: {
+      tradeId: string;
+      price: string;
+      quantity: string;
+      market: string;
+      isBuyerMaker: boolean;
+      timestamp: number;
+    }) => {
+      if (cancelled) return;
+
+      if (trade.market !== market) {
+        return;
+      }
+
+      console.log("🔥 MARKET BAR LIVE TRADE:", trade);
+
+      setTicker((prevTicker) => {
+        if (!prevTicker) {
+          return prevTicker;
+        }
+
+        return {
+          ...prevTicker,
+          lastPrice: String(trade.price),
+        };
+      });
+    };
+
+    signaling.registerCallback("trade", handleTrade, callbackId);
+
+    signaling.sendMessage({
       method: "SUBSCRIBE",
-      params: [`ticker.${market}`],
+      params: [`trade@${market}`],
     });
 
     return () => {
-      SignalingManager.getInstance().deRegisterCallback(
-        "ticker",
-        `TICKER-${market}`,
-      );
-      SignalingManager.getInstance().sendMessage({
+      cancelled = true;
+
+      signaling.deRegisterCallback("trade", callbackId);
+
+      signaling.sendMessage({
         method: "UNSUBSCRIBE",
-        params: [`ticker.${market}`],
+        params: [`trade@${market}`],
       });
     };
   }, [market]);
-  //
 
   return (
     <div className="h-[61px] border-b border-baseBorderLight bg-baseBackgroundL1">
@@ -57,6 +86,7 @@ export const MarketBar = ({ market }: { market: string }) => {
             <p className="text-lg font-semibold tabular-nums text-greenText">
               {ticker?.lastPrice || "--"}
             </p>
+
             <p className="text-xs tabular-nums text-baseTextMedEmphasis">
               {ticker?.lastPrice || "--"}
             </p>
@@ -64,6 +94,7 @@ export const MarketBar = ({ market }: { market: string }) => {
 
           <div className="flex flex-col justify-center">
             <p className="text-[11px] text-baseTextMedEmphasis">24H Change</p>
+
             <p
               className={`mt-1 text-xs font-medium tabular-nums ${
                 Number(ticker?.priceChange) > 0
@@ -81,6 +112,7 @@ export const MarketBar = ({ market }: { market: string }) => {
 
           <div className="flex flex-col justify-center">
             <p className="text-[11px] text-baseTextMedEmphasis">24H High</p>
+
             <p className="mt-1 text-xs font-medium tabular-nums text-baseTextHighEmphasis">
               {ticker?.high || "--"}
             </p>
@@ -88,6 +120,7 @@ export const MarketBar = ({ market }: { market: string }) => {
 
           <div className="flex flex-col justify-center">
             <p className="text-[11px] text-baseTextMedEmphasis">24H Low</p>
+
             <p className="mt-1 text-xs font-medium tabular-nums text-baseTextHighEmphasis">
               {ticker?.low || "--"}
             </p>
@@ -95,6 +128,7 @@ export const MarketBar = ({ market }: { market: string }) => {
 
           <div className="flex flex-col justify-center">
             <p className="text-[11px] text-baseTextMedEmphasis">24H Volume</p>
+
             <p className="mt-1 text-xs font-medium tabular-nums text-baseTextHighEmphasis">
               {ticker?.volume || "--"}
             </p>
@@ -110,27 +144,27 @@ function Ticker({ market }: { market: string }) {
     <div className="flex h-[60px] shrink-0 space-x-4">
       <div className="flex flex-row relative ml-2 -mr-4">
         <img
-          alt="SOL Logo"
+          alt="Base Logo"
           loading="lazy"
           decoding="async"
-          data-nimg="1"
           className="z-10 rounded-full h-6 w-6 mt-4 outline-baseBackgroundL1"
           src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTVvBqZC_Q1TSYObZaMvK0DRFeHZDUtVMh08Q&s"
         />
+
         <img
           alt="USDC Logo"
           loading="lazy"
           decoding="async"
-          data-nimg="1"
           className="h-6 w-6 -ml-2 mt-4 rounded-full"
           src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTVvBqZC_Q1TSYObZaMvK0DRFeHZDUtVMh08Q&s"
         />
       </div>
-      <button type="button" className="react-aria-Button" data-rac="">
+
+      <button type="button" className="react-aria-Button">
         <div className="flex items-center justify-between flex-row cursor-pointer rounded-lg p-3 hover:opacity-80">
-          <div className="flex items-center flex-row gap-2 undefined">
+          <div className="flex items-center flex-row gap-2">
             <div className="flex flex-row relative">
-              <p className="font-medium text-sm undefined">
+              <p className="font-medium text-sm">
                 {market.replace("_", " / ")}
               </p>
             </div>
