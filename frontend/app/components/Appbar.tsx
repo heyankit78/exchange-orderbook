@@ -5,7 +5,7 @@ import { useSession, signOut } from "next-auth/react";
 export const Appbar = () => {
   const route = usePathname();
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
 
   if (route === "/" || route === "/login") {
     return null;
@@ -38,14 +38,21 @@ export const Appbar = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          {session ? (
+          {status === "loading" ? (
+            <div className="h-8 w-[90px] rounded-lg bg-baseBackgroundL2 animate-pulse" />
+          ) : session ? (
             <>
-              <span className="text-xs text-baseTextMedEmphasis hidden sm:block">
+              <span className="hidden text-xs text-baseTextMedEmphasis sm:block">
                 {session.user.email}
               </span>
+
               <button
-                onClick={() => signOut({ callbackUrl: "/login" })}
-                className="h-8 px-4 rounded-lg border border-baseBorderLight text-sm text-baseTextMedEmphasis hover:text-white hover:border-baseBorderFocus transition"
+                onClick={() =>
+                  signOut({
+                    callbackUrl: "/login",
+                  })
+                }
+                className="h-8 rounded-lg border border-baseBorderLight px-4 text-sm text-baseTextMedEmphasis transition hover:border-baseBorderFocus hover:text-white"
               >
                 Log Out
               </button>
@@ -53,7 +60,7 @@ export const Appbar = () => {
           ) : (
             <button
               onClick={() => router.push("/login")}
-              className="h-8 px-4 rounded-lg bg-greenPrimaryButtonBackground text-greenPrimaryButtonText text-sm font-semibold hover:opacity-90 transition"
+              className="h-8 rounded-lg bg-greenPrimaryButtonBackground px-4 text-sm font-semibold text-greenPrimaryButtonText transition hover:opacity-90"
             >
               Log In
             </button>
