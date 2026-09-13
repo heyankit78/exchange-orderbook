@@ -73,7 +73,18 @@ export const MarketBar = ({ market }: { market: string }) => {
       });
     };
   }, [market]);
+  function formatNumber(value: string | number | undefined, decimals = 2) {
+    const num = Number(value);
 
+    if (!Number.isFinite(num)) {
+      return "--";
+    }
+
+    return num.toLocaleString(undefined, {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  }
   return (
     <div className="h-[61px] border-b border-baseBorderLight bg-baseBackgroundL1">
       <div className="flex h-full items-center overflow-x-auto no-scrollbar px-3">
@@ -84,28 +95,27 @@ export const MarketBar = ({ market }: { market: string }) => {
         <div className="ml-5 flex h-full items-center gap-8">
           <div className="flex min-w-[100px] flex-col justify-center">
             <p className="text-lg font-semibold tabular-nums text-greenText">
-              {ticker?.lastPrice || "--"}
+              {formatNumber(ticker?.lastPrice)}
             </p>
 
             <p className="text-xs tabular-nums text-baseTextMedEmphasis">
-              {ticker?.lastPrice || "--"}
+              {formatNumber(ticker?.lastPrice)}
             </p>
           </div>
 
           <div className="flex flex-col justify-center">
             <p className="text-[11px] text-baseTextMedEmphasis">24H Change</p>
-
             <p
               className={`mt-1 text-xs font-medium tabular-nums ${
-                Number(ticker?.priceChange) > 0
+                Number(ticker?.priceChange) >= 0
                   ? "text-greenText"
                   : "text-redText"
               }`}
             >
-              {Number(ticker?.priceChange) > 0 ? "+" : ""}
-              {ticker?.priceChange || "--"}{" "}
+              {Number(ticker?.priceChange) >= 0 ? "+" : ""}
+              {formatNumber(ticker?.priceChange)}{" "}
               {ticker?.priceChangePercent
-                ? `${Number(ticker.priceChangePercent).toFixed(2)}%`
+                ? `(${Number(ticker.priceChangePercent).toFixed(2)}%)`
                 : "--"}
             </p>
           </div>

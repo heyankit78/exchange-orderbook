@@ -182,12 +182,10 @@ export function OrderBookView({
 
 function TableHeader() {
   return (
-    <div className="grid grid-cols-3 border-b border-baseBorderLight px-3 py-2 text-[11px]">
-      <div className="text-baseTextMedEmphasis">Price</div>
-
-      <div className="text-right text-baseTextMedEmphasis">Size</div>
-
-      <div className="text-right text-baseTextMedEmphasis">Total</div>
+    <div className="grid grid-cols-3 px-3 py-2 text-[11px] text-baseTextMedEmphasis">
+      <span className="text-left">Price</span>
+      <span className="text-right">Size</span>
+      <span className="text-right">Value</span>
     </div>
   );
 }

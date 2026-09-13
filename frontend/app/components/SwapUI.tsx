@@ -161,6 +161,9 @@ export function SwapUI({
   // FETCH ORDER HISTORY
   // ----------------------------------------
 
+  useEffect(() => {
+    console.log("ORDER HISTORY ankit:", orderHistory);
+  }, [orderHistory]);
   const fetchOrderHistory = async () => {
     if (!session?.accessToken) return;
 
@@ -190,6 +193,16 @@ export function SwapUI({
 
           if (localRank > serverRank) {
             return localOrder;
+          }
+
+          if (
+            localOrder.price &&
+            (!serverOrder.price || serverOrder.price === "null")
+          ) {
+            return {
+              ...serverOrder,
+              price: localOrder.price,
+            };
           }
 
           return serverOrder;
@@ -295,18 +308,23 @@ export function SwapUI({
       // INSTANT TERMINAL ORDER HISTORY
       // ----------------------------------------
 
+      const totalExecutedValue =
+        response.fills?.reduce(
+          (total: number, fill: { price: string; quantity: number | string }) =>
+            total + Number(fill.price) * Number(fill.quantity),
+          0,
+        ) ?? 0;
+
+      const executedPrice =
+        executedQuantity > 0 ? totalExecutedValue / executedQuantity : 0;
+
       if (status === "FILLED" || status === "CANCELLED") {
         const historyOrder: OrderHistoryItem = {
           orderId: response.orderId,
           market,
           side: activeTab,
 
-          price:
-            type === "market"
-              ? response.fills?.[0]?.price
-                ? String(response.fills[0].price)
-                : "0"
-              : price,
+          price: type === "market" ? String(executedPrice) : price,
 
           quantity: String(orderQuantity),
           filled: String(executedQuantity),
@@ -585,12 +603,15 @@ export function SwapUI({
             <EmptyState text="No open orders" />
           ) : (
             <>
-              <div className="grid grid-cols-6 gap-4 pb-2 text-[11px] text-baseTextMedEmphasis">
+              <div className="grid grid-cols-[130px_90px_100px_110px_110px_110px_110px_1fr_100px] items-center gap-4 pb-2 text-[11px] text-baseTextMedEmphasis">
+                <span>Order ID</span>
                 <span>Side</span>
                 <span>Price</span>
                 <span>Quantity</span>
                 <span>Filled</span>
                 <span>Remaining</span>
+                <span>Value</span>
+                <span>Market</span>
                 <span className="text-right">Action</span>
               </div>
 
@@ -599,34 +620,47 @@ export function SwapUI({
                   const remaining =
                     Number(order.quantity) - Number(order.filled);
 
+                  const value = Number(order.price) * Number(order.quantity);
+
                   return (
                     <div
                       key={order.orderId}
-                      className="grid grid-cols-6 gap-4 items-center border-t border-baseBorderLight py-2.5 text-xs hover:bg-baseBackgroundL2"
+                      className="grid grid-cols-[130px_90px_100px_110px_110px_110px_110px_1fr_100px] items-center gap-4 border-t border-baseBorderLight py-2.5 text-xs tabular-nums hover:bg-baseBackgroundL2"
                     >
+                      <span
+                        className="truncate text-baseTextMedEmphasis"
+                        title={order.orderId}
+                      >
+                        {order.orderId.slice(0, 12)}...
+                      </span>
+
                       <span
                         className={
                           order.side === "buy"
-                            ? "text-greenText font-medium"
-                            : "text-redText font-medium"
+                            ? "font-medium text-greenText"
+                            : "font-medium text-redText"
                         }
                       >
                         {order.side.toUpperCase()}
                       </span>
 
-                      <span>{order.price}</span>
+                      <span>{Number(order.price).toFixed(2)}</span>
 
-                      <span>{order.quantity}</span>
+                      <span>{Number(order.quantity)}</span>
 
-                      <span>{order.filled}</span>
+                      <span>{Number(order.filled)}</span>
 
                       <span>{remaining}</span>
+
+                      <span>{value.toFixed(2)}</span>
+
+                      <span>{market.replace("_", "/")}</span>
 
                       <div className="flex justify-end">
                         <button
                           disabled={cancelingOrderId === order.orderId}
                           onClick={() => handleCancelOrder(order.orderId)}
-                          className="px-3 py-1 rounded bg-baseBackgroundL2 hover:bg-baseBackgroundL3 text-xs disabled:opacity-50"
+                          className="rounded bg-baseBackgroundL2 px-3 py-1 text-xs hover:bg-baseBackgroundL3 disabled:opacity-50"
                         >
                           {cancelingOrderId === order.orderId
                             ? "Cancelling..."
@@ -656,43 +690,65 @@ export function SwapUI({
             <EmptyState text="No order history" />
           ) : (
             <>
-              <div className="grid grid-cols-[80px_1fr_120px_140px] items-center gap-4 pb-2 text-[11px] text-baseTextMedEmphasis">
+              <div className="grid grid-cols-[130px_90px_100px_110px_110px_110px_110px_1fr] items-center gap-4 pb-2 text-[11px] text-baseTextMedEmphasis">
+                <span>Order ID</span>
                 <span>Side</span>
-
                 <span>Price</span>
-
+                <span>Quantity</span>
                 <span>Filled</span>
-
+                <span>Remaining</span>
+                <span>Value</span>
                 <span>Status</span>
               </div>
 
               <div className="h-[190px] overflow-y-auto overflow-x-hidden pr-2 [scrollbar-width:thin] [scrollbar-color:#4b5563_transparent]">
-                {orderHistory.map((order) => (
-                  <div
-                    key={order.orderId}
-                    className="grid grid-cols-[80px_1fr_120px_140px] items-center gap-4 border-t border-baseBorderLight py-2.5 text-xs hover:bg-baseBackgroundL2"
-                  >
-                    <span
-                      className={
-                        order.side === "buy"
-                          ? "text-greenText font-medium"
-                          : "text-redText font-medium"
-                      }
+                {orderHistory.map((order) => {
+                  const orderPrice = Number(order.price);
+                  const filled = Number(order.filled);
+                  const quantity = Number(order.quantity);
+
+                  const value = Number.isFinite(orderPrice)
+                    ? orderPrice * filled
+                    : 0;
+
+                  return (
+                    <div
+                      key={order.orderId}
+                      className="grid grid-cols-[130px_90px_100px_110px_110px_110px_110px_1fr] items-center gap-4 border-t border-baseBorderLight py-2.5 text-xs tabular-nums hover:bg-baseBackgroundL2"
                     >
-                      {order.side.toUpperCase()}
-                    </span>
+                      <span
+                        className="truncate text-baseTextMedEmphasis"
+                        title={order.orderId}
+                      >
+                        {order.orderId.slice(0, 12)}...
+                      </span>
 
-                    <span className="font-medium">
-                      {Number(order.price).toFixed(2)}
-                    </span>
+                      <span
+                        className={
+                          order.side === "buy"
+                            ? "font-medium text-greenText"
+                            : "font-medium text-redText"
+                        }
+                      >
+                        {order.side.toUpperCase()}
+                      </span>
 
-                    <span>
-                      {Number(order.filled)}/{Number(order.quantity)}
-                    </span>
+                      <span className="font-medium">
+                        {Number(order.price).toFixed(2)}
+                      </span>
 
-                    <OrderStatusBadge status={order.status} />
-                  </div>
-                ))}
+                      <span>{quantity}</span>
+
+                      <span>{filled}</span>
+
+                      <span>{Number(order.remaining)}</span>
+
+                      <span>{value.toFixed(2)}</span>
+
+                      <OrderStatusBadge status={order.status} />
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}
@@ -713,15 +769,13 @@ export function SwapUI({
             <EmptyState text="No trades yet" />
           ) : (
             <>
-              <div className="grid grid-cols-[80px_120px_100px_120px_1fr] items-center gap-4 pb-2 text-[11px] text-baseTextMedEmphasis">
+              <div className="grid grid-cols-[140px_100px_110px_110px_120px_150px_1fr] items-center gap-4 pb-2 text-[11px] text-baseTextMedEmphasis">
+                <span>Trade ID</span>
                 <span>Side</span>
-
                 <span>Price</span>
-
-                <span>Qty</span>
-
+                <span>Quantity</span>
                 <span>Value</span>
-
+                <span>Market</span>
                 <span>Time</span>
               </div>
 
@@ -732,13 +786,20 @@ export function SwapUI({
                   return (
                     <div
                       key={trade.tradeId}
-                      className="grid grid-cols-[80px_120px_100px_120px_1fr] items-center gap-4 border-t border-baseBorderLight py-2.5 text-xs hover:bg-baseBackgroundL2"
+                      className="grid grid-cols-[140px_100px_110px_110px_120px_150px_1fr] items-center gap-4 border-t border-baseBorderLight py-2.5 text-xs tabular-nums hover:bg-baseBackgroundL2"
                     >
+                      <span
+                        className="truncate text-baseTextMedEmphasis"
+                        title={String(trade.tradeId)}
+                      >
+                        {String(trade.tradeId).slice(0, 13)}...
+                      </span>
+
                       <span
                         className={
                           trade.side === "buy"
-                            ? "text-greenText font-semibold"
-                            : "text-redText font-semibold"
+                            ? "font-semibold text-greenText"
+                            : "font-semibold text-redText"
                         }
                       >
                         {trade.side.toUpperCase()}
@@ -754,7 +815,9 @@ export function SwapUI({
                         {value.toFixed(2)}
                       </span>
 
-                      <span className="text-xs text-baseTextMedEmphasis whitespace-nowrap">
+                      <span>{trade.market.replace("_", "/")}</span>
+
+                      <span className="whitespace-nowrap text-xs text-baseTextMedEmphasis">
                         {trade.createdAt
                           ? new Date(trade.createdAt).toLocaleTimeString([], {
                               hour: "2-digit",
