@@ -4,7 +4,8 @@ import { SubscriptionManager } from "./SubscriptionManager";
 
 export class UserManager {
   private static instance: UserManager;
-  private users: Map<string, User> = new Map();
+
+  private users = new Map<string, User>();
 
   private constructor() {}
 
@@ -12,6 +13,7 @@ export class UserManager {
     if (!this.instance) {
       this.instance = new UserManager();
     }
+
     return this.instance;
   }
 
@@ -22,17 +24,23 @@ export class UserManager {
 
     this.users.set(connectionId, user);
 
-    this.registerOnClose(ws, connectionId);
+    console.log("🟢 WS connection created:", connectionId);
+
+    ws.on("close", async () => {
+      console.log("🔴 WS connection closed:", connectionId);
+
+      try {
+        // First clean Redis subscriptions
+        await SubscriptionManager.getInstance().userLeft(connectionId);
+      } catch (error) {
+        console.error("❌ Failed cleaning WS subscriptions:", error);
+      }
+
+      // Then remove the User object
+      this.users.delete(connectionId);
+    });
 
     return user;
-  }
-
-  private registerOnClose(ws: WebSocket, connectionId: string) {
-    ws.on("close", () => {
-      this.users.delete(connectionId);
-
-      SubscriptionManager.getInstance().userLeft(connectionId);
-    });
   }
 
   public getUser(connectionId: string) {
@@ -40,9 +48,6 @@ export class UserManager {
   }
 
   private getRandomId() {
-    return (
-      Math.random().toString(36).substring(2, 15) +
-      Math.random().toString(36).substring(2, 15)
-    );
+    return crypto.randomUUID();
   }
 }

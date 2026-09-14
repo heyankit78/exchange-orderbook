@@ -1,6 +1,7 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
+import { SignalingManager } from "../utils/SignalingManager";
 
 export const Appbar = () => {
   const route = usePathname();
@@ -10,7 +11,13 @@ export const Appbar = () => {
   if (route === "/" || route === "/login") {
     return null;
   }
+  const handleLogout = async () => {
+    SignalingManager.getInstance().clearAuthentication();
 
+    await signOut({
+      callbackUrl: "/login",
+    });
+  };
   return (
     <div className="text-white border-b border-baseBorderLight bg-baseBackgroundL1 sticky top-0 z-50">
       <div className="flex justify-between items-center px-6 h-14">
@@ -47,11 +54,7 @@ export const Appbar = () => {
               </span>
 
               <button
-                onClick={() =>
-                  signOut({
-                    callbackUrl: "/login",
-                  })
-                }
+                onClick={handleLogout}
                 className="h-8 rounded-lg border border-baseBorderLight px-4 text-sm text-baseTextMedEmphasis transition hover:border-baseBorderFocus hover:text-white"
               >
                 Log Out

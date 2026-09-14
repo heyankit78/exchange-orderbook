@@ -50,7 +50,9 @@ export class SignalingManager {
       token,
     });
   }
-
+  public clearAuthentication() {
+    this.authToken = undefined;
+  }
   // =====================================================
   // SOCKET INITIALIZATION
   // =====================================================
@@ -200,11 +202,16 @@ export class SignalingManager {
   sendMessage(message: Record<string, unknown>) {
     if (message.method === "SUBSCRIBE") {
       const subscriptionsToSend: string[] = [];
+
       //@ts-ignore
       message.params?.forEach((subscription: string) => {
         const currentCount = this.subscriptions.get(subscription) ?? 0;
 
+        console.log("🟢 SUB COUNT BEFORE:", subscription, currentCount);
+
         this.subscriptions.set(subscription, currentCount + 1);
+
+        console.log("🟢 SUB COUNT AFTER:", subscription, currentCount + 1);
 
         // Only tell server when 0 -> 1
         if (currentCount === 0) {
@@ -224,6 +231,8 @@ export class SignalingManager {
         return;
       }
 
+      console.log("📤 SENDING SUBSCRIBE TO SERVER:", subscriptionsToSend);
+
       this.sendRaw({
         method: "SUBSCRIBE",
         params: subscriptionsToSend,
@@ -238,31 +247,33 @@ export class SignalingManager {
 
     if (message.method === "UNSUBSCRIBE") {
       const subscriptionsToRemove: string[] = [];
+
       //@ts-ignore
       message.params?.forEach((subscription: string) => {
         const currentCount = this.subscriptions.get(subscription) ?? 0;
+
+        console.log("🔴 UNSUB COUNT BEFORE:", subscription, currentCount);
 
         // Nobody owns this subscription
         if (currentCount === 0) {
           return;
         }
 
-        // Last consumer leaving
         if (currentCount === 1) {
           this.subscriptions.delete(subscription);
+
+          console.log("🔴 UNSUB COUNT AFTER:", subscription, 0);
 
           subscriptionsToRemove.push(subscription);
 
           return;
         }
 
-        // Example:
-        // 3 -> 2
-        // 2 -> 1
         this.subscriptions.set(subscription, currentCount - 1);
+
+        console.log("🔴 UNSUB COUNT AFTER:", subscription, currentCount - 1);
       });
 
-      // Other components still need every channel
       if (subscriptionsToRemove.length === 0) {
         return;
       }

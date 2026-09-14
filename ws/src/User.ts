@@ -55,15 +55,11 @@ export class User {
     this.addListeners();
   }
 
-  public subscribe(subscription: string) {
-    this.subscriptions.push(subscription);
-  }
-
-  public unsubscribe(subscription: string) {
-    this.subscriptions = this.subscriptions.filter((s) => s !== subscription);
-  }
-
   emit(message: WsMessage) {
+    if (this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
     this.ws.send(JSON.stringify(message));
   }
 
@@ -117,6 +113,9 @@ export class User {
       // SUBSCRIBE
       // =====================================
       if (parsedMessage.method === SUBSCRIBE) {
+        console.log("🟡 WS SERVER SUBSCRIBE:", {
+          subscriptions: parsedMessage.params,
+        });
         for (const subscription of parsedMessage.params) {
           if (subscription.startsWith("user_trades@")) {
             const requestedUserId = subscription.split("@")[1];

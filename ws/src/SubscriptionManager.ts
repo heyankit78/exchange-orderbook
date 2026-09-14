@@ -4,13 +4,16 @@ import { UserManager } from "./UserManager";
 export class SubscriptionManager {
   private static instance: SubscriptionManager;
 
-  private subscriptions: Map<string, string[]> = new Map();
-  private reverseSubscriptions: Map<string, string[]> = new Map();
+  // connectionId -> channels wanted by that websocket
+  private subscriptions = new Map<string, Set<string>>();
+
+  // channel -> websocket connectionIds
+  private reverseSubscriptions = new Map<string, Set<string>>();
+
+  // Redis channels this WS service has already subscribed to
+  private redisSubscribedChannels = new Set<string>();
 
   private redisClient: RedisClientType;
-
-  // IMPORTANT:
-  // everybody waits for the SAME Redis connection
   private redisReady: Promise<void>;
 
   private constructor() {
@@ -33,112 +36,126 @@ export class SubscriptionManager {
     return this.instance;
   }
 
+  // =====================================================
+  // SUBSCRIBE
+  // =====================================================
+
   public async subscribe(connectionId: string, subscription: string) {
-    // ----------------------------------------
-    // already subscribed by this websocket
-    // ----------------------------------------
-    if (this.subscriptions.get(connectionId)?.includes(subscription)) {
+    await this.redisReady;
+
+    let userSubscriptions = this.subscriptions.get(connectionId);
+
+    if (!userSubscriptions) {
+      userSubscriptions = new Set<string>();
+
+      this.subscriptions.set(connectionId, userSubscriptions);
+    }
+
+    // This websocket already wants this channel
+    if (userSubscriptions.has(subscription)) {
       return;
     }
 
-    // ----------------------------------------
-    // WAIT UNTIL REDIS IS REALLY CONNECTED
-    // ----------------------------------------
-    await this.redisReady;
+    // -------------------------------------------------
+    // Subscribe Redis only ONCE for lifetime of service
+    // -------------------------------------------------
 
-    const existingConnections =
-      this.reverseSubscriptions.get(subscription) || [];
+    if (!this.redisSubscribedChannels.has(subscription)) {
+      // Mark first BEFORE await.
+      // This prevents another subscribe call from also
+      // trying to subscribe the same Redis channel.
+      this.redisSubscribedChannels.add(subscription);
 
-    const isFirstSubscriber = existingConnections.length === 0;
+      try {
+        console.log("📡 Redis subscribing:", subscription);
 
-    // ----------------------------------------
-    // IMPORTANT:
-    // subscribe Redis FIRST
-    // ----------------------------------------
-    if (isFirstSubscriber) {
-      console.log("📡 Redis subscribing:", subscription);
+        await this.redisClient.subscribe(
+          subscription,
+          this.redisCallbackHandler,
+        );
 
-      await this.redisClient.subscribe(subscription, this.redisCallbackHandler);
+        console.log("✅ Redis subscribed:", subscription);
+      } catch (error) {
+        // Allow retry later if Redis subscribe failed
+        this.redisSubscribedChannels.delete(subscription);
 
-      console.log("✅ Redis subscribed:", subscription);
+        throw error;
+      }
     }
 
-    // ----------------------------------------
-    // only update our bookkeeping AFTER success
-    // ----------------------------------------
-    this.subscriptions.set(connectionId, [
-      ...(this.subscriptions.get(connectionId) || []),
-      subscription,
-    ]);
+    // -------------------------------------------------
+    // Add local websocket ownership
+    // -------------------------------------------------
 
-    this.reverseSubscriptions.set(subscription, [
-      ...existingConnections,
-      connectionId,
-    ]);
+    userSubscriptions.add(subscription);
+
+    let channelConnections = this.reverseSubscriptions.get(subscription);
+
+    if (!channelConnections) {
+      channelConnections = new Set<string>();
+
+      this.reverseSubscriptions.set(subscription, channelConnections);
+    }
+
+    channelConnections.add(connectionId);
 
     console.log("✅ WS client subscribed:", {
+      connectionId,
+      subscription,
+      listeners: channelConnections.size,
+    });
+  }
+
+  // =====================================================
+  // UNSUBSCRIBE
+  // =====================================================
+
+  public async unsubscribe(connectionId: string, subscription: string) {
+    const userSubscriptions = this.subscriptions.get(connectionId);
+
+    if (!userSubscriptions?.has(subscription)) {
+      return;
+    }
+
+    // Remove channel from this websocket
+    userSubscriptions.delete(subscription);
+
+    if (userSubscriptions.size === 0) {
+      this.subscriptions.delete(connectionId);
+    }
+
+    // Remove websocket from channel listeners
+    const channelConnections = this.reverseSubscriptions.get(subscription);
+
+    if (channelConnections) {
+      channelConnections.delete(connectionId);
+
+      if (channelConnections.size === 0) {
+        // Important:
+        //
+        // Remove local listeners,
+        // but DON'T Redis UNSUBSCRIBE.
+        //
+        // Redis subscription stays alive.
+        this.reverseSubscriptions.delete(subscription);
+      }
+    }
+
+    console.log("🔴 WS client unsubscribed:", {
       connectionId,
       subscription,
     });
   }
 
-  private redisCallbackHandler = (message: string, channel: string) => {
-    try {
-      const parsedMessage = JSON.parse(message);
-
-      console.log("🔥 REDIS PUBSUB RECEIVED:", channel);
-
-      this.reverseSubscriptions.get(channel)?.forEach((connectionId) => {
-        UserManager.getInstance().getUser(connectionId)?.emit(parsedMessage);
-      });
-    } catch (error) {
-      console.error("❌ Failed processing Redis PubSub message:", error);
-    }
-  };
-
-  public async unsubscribe(connectionId: string, subscription: string) {
-    await this.redisReady;
-
-    const connectionSubscriptions = this.subscriptions.get(connectionId);
-
-    if (!connectionSubscriptions?.includes(subscription)) {
-      return;
-    }
-
-    const updatedConnectionSubscriptions = connectionSubscriptions.filter(
-      (item) => item !== subscription,
-    );
-
-    if (updatedConnectionSubscriptions.length === 0) {
-      this.subscriptions.delete(connectionId);
-    } else {
-      this.subscriptions.set(connectionId, updatedConnectionSubscriptions);
-    }
-
-    const connections = this.reverseSubscriptions.get(subscription) || [];
-
-    const remainingConnections = connections.filter(
-      (item) => item !== connectionId,
-    );
-
-    if (remainingConnections.length === 0) {
-      this.reverseSubscriptions.delete(subscription);
-
-      console.log("📡 Redis unsubscribing:", subscription);
-
-      await this.redisClient.unsubscribe(subscription);
-
-      console.log("✅ Redis unsubscribed:", subscription);
-    } else {
-      this.reverseSubscriptions.set(subscription, remainingConnections);
-    }
-  }
+  // =====================================================
+  // SOCKET CLOSED
+  // =====================================================
 
   public async userLeft(connectionId: string) {
-    console.log("user connection left", connectionId);
+    console.log("👋 WS connection left:", connectionId);
 
     const activeSubscriptions = [
-      ...(this.subscriptions.get(connectionId) || []),
+      ...(this.subscriptions.get(connectionId) ?? []),
     ];
 
     for (const subscription of activeSubscriptions) {
@@ -148,7 +165,35 @@ export class SubscriptionManager {
     this.subscriptions.delete(connectionId);
   }
 
-  getSubscriptions(connectionId: string) {
-    return this.subscriptions.get(connectionId) || [];
+  // =====================================================
+  // REDIS MESSAGE
+  // =====================================================
+
+  private redisCallbackHandler = (message: string, channel: string) => {
+    try {
+      const parsedMessage = JSON.parse(message);
+
+      console.log("🔥 REDIS PUBSUB RECEIVED:", channel);
+
+      const connections = this.reverseSubscriptions.get(channel);
+
+      // Redis may still be subscribed even though
+      // currently no browser needs the channel.
+      if (!connections?.size) {
+        return;
+      }
+
+      connections.forEach((connectionId) => {
+        const user = UserManager.getInstance().getUser(connectionId);
+
+        user?.emit(parsedMessage);
+      });
+    } catch (error) {
+      console.error("❌ Failed processing Redis PubSub:", error);
+    }
+  };
+
+  public getSubscriptions(connectionId: string) {
+    return [...(this.subscriptions.get(connectionId) ?? [])];
   }
 }
