@@ -8,11 +8,7 @@ import { ON_RAMP } from "@repo/shared";
 export const authRouter = Router();
 
 const pgClient = new Client({
-  user: "your_user",
-  host: "localhost",
-  database: "my_database",
-  password: "your_password",
-  port: 5432,
+  connectionString: process.env.DATABASE_URL,
 });
 pgClient.connect();
 
@@ -20,10 +16,9 @@ function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password).digest("hex");
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || "my-super-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET;
 
-const REFRESH_TOKEN_SECRET =
-  process.env.REFRESH_TOKEN_SECRET || "my-super-refresh-secret-key";
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
 
 function createAccessToken(user: { id: string | number; email: string }) {
   return jwt.sign(

@@ -38,18 +38,20 @@ export class Engine {
 
   constructor() {
     // Connect to PostgreSQL and load balances
-    this.pgClient = new Client({
-      user: "your_user",
-      host: "localhost",
-      database: "my_database",
-      password: "your_password",
-      port: 5432,
-    });
+    const DATABASE_URL = process.env.DATABASE_URL;
 
+    if (!DATABASE_URL) {
+      throw new Error("DATABASE_URL is missing");
+    }
+
+    this.pgClient = new Client({
+      connectionString: DATABASE_URL,
+    });
     // Load orderbook snapshot if available
     let snapshot = null;
+    const WITH_SNAPSHOT = process.env.WITH_SNAPSHOT === "true";
     try {
-      if (process.env.WITH_SNAPSHOT) {
+      if (WITH_SNAPSHOT) {
         // snapshot = fs.readFileSync("./snapshot.json");
       }
     } catch (e) {

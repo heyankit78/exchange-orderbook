@@ -1,7 +1,11 @@
 import { IncomingWsMessage, WsMessage } from "@repo/shared";
 import { Ticker } from "./types";
 
-export const BASE_URL = "ws://localhost:3001";
+export const BASE_URL = process.env.NEXT_PUBLIC_WS_URL;
+
+if (!BASE_URL) {
+  throw new Error("NEXT_PUBLIC_WS_URL is missing");
+}
 
 export class SignalingManager {
   private ws: WebSocket;

@@ -1,28 +1,54 @@
 import { RedisClientType, createClient } from "redis";
+
 export class RedisManager {
   private client: RedisClientType;
   private publisher: RedisClientType;
+
   private static instance: RedisManager;
 
   private constructor() {
-    this.client = createClient();
+    const redisUrl = process.env.REDIS_URL;
+
+    if (!redisUrl) {
+      throw new Error("REDIS_URL is missing");
+    }
+
+    this.client = createClient({
+      url: redisUrl,
+    });
+
+    this.publisher = createClient({
+      url: redisUrl,
+    });
+
+    this.client.on("error", (err) => {
+      console.error("Redis subscriber error:", err);
+    });
+
+    this.publisher.on("error", (err) => {
+      console.error("Redis publisher error:", err);
+    });
+
     this.client.connect();
-    this.publisher = createClient();
     this.publisher.connect();
   }
+
   public static getInstance() {
     if (!this.instance) {
       this.instance = new RedisManager();
     }
+
     return this.instance;
   }
-  public async sendAndAwait(message) {
+
+  public async sendAndAwait(message: unknown) {
     return new Promise(async (resolve, reject) => {
       const id = this.getRandomClientId();
 
       try {
         await this.client.subscribe(id, (message) => {
           this.client.unsubscribe(id);
+
           resolve(JSON.parse(message));
         });
 

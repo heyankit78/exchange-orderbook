@@ -1,13 +1,10 @@
+import "dotenv/config";
 import { Client } from "pg";
 import { createClient } from "redis";
 import { DbMessage } from "@repo/shared";
 
 const pgClient = new Client({
-  user: "your_user",
-  host: "localhost",
-  database: "my_database",
-  password: "your_password",
-  port: 5432,
+  connectionString: process.env.DATABASE_URL,
 });
 
 async function processDbMessage(data: DbMessage) {
@@ -368,7 +365,9 @@ async function main() {
   // Redis
   // ---------------------------------------------------------
 
-  const redisClient = createClient();
+  const redisClient = createClient({
+    url: process.env.REDIS_URL,
+  });
 
   await redisClient.connect();
 

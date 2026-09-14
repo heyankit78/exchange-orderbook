@@ -2,10 +2,14 @@ import axios from "axios";
 import { Balances, Depth, KLine, Ticker, Trade, OpenOrder } from "./types";
 import { signOut } from "next-auth/react";
 
-const BASE_URL = "http://localhost:3000/api/v1";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+if (!API_URL) {
+  throw new Error("NEXT_PUBLIC_API_URL is missing");
+}
 
 const api = axios.create({
-  baseURL: BASE_URL,
+  baseURL: API_URL,
 });
 
 /*

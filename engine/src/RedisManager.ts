@@ -1,49 +1,20 @@
-import { DEPTH_UPDATE, TICKER_UPDATE } from "./trade/events";
 import { RedisClientType, createClient } from "redis";
-import {
-  ORDER_UPDATE,
-  TRADE_ADDED,
-  WsMessage,
-  MessageToApi,
-  DbMessage,
-} from "@repo/shared";
-
-// type DbMessage =
-//   | {
-//       type: typeof TRADE_ADDED;
-//       data: {
-//         id: string;
-//         isBuyerMaker: boolean;
-//         price: string;
-//         quantity: string;
-//         quoteQuantity: string;
-//         timestamp: number;
-//         market: string;
-
-//         buyerUserId: string;
-//         sellerUserId: string;
-//       };
-//     }
-//   | {
-//       type: typeof ORDER_UPDATE;
-//       data: {
-//         orderId: string;
-//         executedQuantity: number;
-//         userId?: string;
-//         market?: string;
-//         price?: string;
-//         quantity?: string;
-//         side?: "buy" | "sell";
-//         cancelled?: boolean;
-//       };
-//     };
+import { WsMessage, MessageToApi, DbMessage } from "@repo/shared";
 
 export class RedisManager {
   private client: RedisClientType;
   private static instance: RedisManager;
 
   constructor() {
-    this.client = createClient();
+    const REDIS_URL = process.env.REDIS_URL;
+
+    if (!REDIS_URL) {
+      throw new Error("REDIS_URL is missing");
+    }
+
+    this.client = createClient({
+      url: REDIS_URL,
+    });
     this.client.connect();
   }
 

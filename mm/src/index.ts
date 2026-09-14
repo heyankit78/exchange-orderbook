@@ -1,8 +1,19 @@
+import "dotenv/config";
 import axios from "axios";
 import { MARKETS } from "@repo/shared";
 import { seedBotBalances } from "./seedBotBalances";
 
-const BASE_URL = "http://localhost:3000";
+const BASE_URL = process.env.API_URL;
+
+const MM_EMAIL = process.env.MM_EMAIL;
+const MM_PASSWORD = process.env.MM_PASSWORD;
+
+const TAKER_EMAIL = process.env.TAKER_EMAIL;
+const TAKER_PASSWORD = process.env.TAKER_PASSWORD;
+
+if (!BASE_URL || !MM_EMAIL || !MM_PASSWORD || !TAKER_EMAIL || !TAKER_PASSWORD) {
+  throw new Error("Missing MM environment variables");
+}
 
 const TOTAL_BIDS = 15;
 const TOTAL_ASKS = 15;
@@ -10,12 +21,6 @@ const TOTAL_ASKS = 15;
 const ACTIVE_MARKETS = [MARKETS.BTC_USDC, MARKETS.ETH_USDC, MARKETS.SOL_USDC];
 
 type MarketConfig = (typeof ACTIVE_MARKETS)[number];
-
-const MM_EMAIL = "mm@test.com";
-const MM_PASSWORD = "password123";
-
-const TAKER_EMAIL = "taker@test.com";
-const TAKER_PASSWORD = "password123";
 
 async function login(email: string, password: string) {
   const response = await axios.post(`${BASE_URL}/api/v1/auth/login`, {

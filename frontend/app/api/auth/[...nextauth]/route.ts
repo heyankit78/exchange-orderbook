@@ -1,7 +1,10 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+const BACKEND_URL = process.env.API_URL;
 
-const BACKEND_URL = "http://localhost:3000/api/v1";
+if (!BACKEND_URL) {
+  throw new Error("API_URL is missing");
+}
 
 async function refreshAccessToken(token: any) {
   try {

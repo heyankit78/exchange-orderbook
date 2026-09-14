@@ -17,7 +17,15 @@ export class SubscriptionManager {
   private redisReady: Promise<void>;
 
   private constructor() {
-    this.redisClient = createClient();
+    const REDIS_URL = process.env.REDIS_URL;
+
+    if (!REDIS_URL) {
+      throw new Error("REDIS_URL is missing");
+    }
+
+    this.redisClient = createClient({
+      url: REDIS_URL,
+    });
 
     this.redisClient.on("error", (error) => {
       console.error("❌ WS Redis error:", error);

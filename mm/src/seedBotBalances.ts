@@ -1,6 +1,10 @@
 import axios from "axios";
 
-const BASE_URL = "http://localhost:3000";
+const BASE_URL = process.env.API_URL;
+
+if (!BASE_URL) {
+  throw new Error("API_URL is missing");
+}
 
 const TARGET_BALANCES = {
   USDC: 10_000_000,
