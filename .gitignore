@@ -34,3 +34,5 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+frontend/analyze/
