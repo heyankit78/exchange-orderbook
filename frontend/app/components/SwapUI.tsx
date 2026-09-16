@@ -391,6 +391,8 @@ export function SwapUI({
         filled: string;
         status: OrderHistoryItem["status"];
       }) => {
+        console.log("🔥 OPEN ORDER UPDATE CALLBACK:", update);
+
         const currentStatus = latestOrderStatusRef.current.get(update.orderId);
 
         // Ignore stale WS events completely

@@ -1,7 +1,16 @@
+"use client";
+
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { OrderBookPreview } from "./OrderBookPreview";
 
 export function Hero() {
+  const { data: session } = useSession();
+
+  const startTradingHref = session?.accessToken
+    ? "/trade/BTC_USDC"
+    : "/login?callbackUrl=/trade/BTC_USDC";
+
   return (
     <section id="about" className="relative border-b border-baseBorderLight">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_30%,rgba(16,185,129,0.08),transparent_32%)]" />
@@ -26,7 +35,7 @@ export function Hero() {
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/trade/BTC_USDC"
+              href={startTradingHref}
               className="inline-flex h-12 items-center justify-center rounded-md bg-greenText px-6 text-sm font-semibold text-black transition hover:opacity-90"
             >
               Start Trading
@@ -64,6 +73,7 @@ function Metric({ label, value }: { label: string; value: string }) {
       <div className="text-[10px] uppercase tracking-[0.18em] text-baseTextMedEmphasis">
         {label}
       </div>
+
       <div className="mt-1 text-sm font-medium text-baseTextHighEmphasis">
         {value}
       </div>

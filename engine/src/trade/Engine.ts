@@ -474,7 +474,15 @@ export class Engine {
         quantity: fill.quantity,
       })),
     );
+    // const { fills, executedQuantity } = orderbook.addOrder(order, streamId);
 
+    console.log("1️⃣ MATCH DONE", {
+      executedQuantity,
+      fillsLength: fills.length,
+      fills,
+    });
+
+    console.log("2️⃣ BEFORE updateBalance");
     await this.updateBalance(
       takerUserId,
       baseAsset,
@@ -483,13 +491,40 @@ export class Engine {
       fills,
       Number(price),
     );
+    console.log("3️⃣ AFTER updateBalance");
 
+    console.log("4️⃣ BEFORE createDbTrades");
     await this.createDbTrades(side, fills, market, takerUserId);
+    console.log("5️⃣ AFTER createDbTrades");
+
+    console.log("6️⃣ BEFORE updateDbOrders");
     await this.updateDbOrders(order, executedQuantity, fills, market, "limit");
+    console.log("7️⃣ AFTER updateDbOrders");
+
+    console.log("8️⃣ BEFORE depth update");
     await this.publisWsDepthUpdates(fills, price, side, market);
+    console.log("9️⃣ AFTER depth update");
+
+    console.log("🔟 BEFORE publishUserOrderUpdates");
+
     await this.publishUserOrderUpdates(order, executedQuantity, fills);
-    await this.publishWsTrades(side, fills, market);
-    await this.publishUserTradeUpdates(side, fills, market, takerUserId);
+
+    console.log("1️⃣1️⃣ AFTER publishUserOrderUpdates");
+    // await this.updateBalance(
+    //   takerUserId,
+    //   baseAsset,
+    //   quoteAsset,
+    //   side,
+    //   fills,
+    //   Number(price),
+    // );
+
+    // await this.createDbTrades(side, fills, market, takerUserId);
+    // await this.updateDbOrders(order, executedQuantity, fills, market, "limit");
+    // await this.publisWsDepthUpdates(fills, price, side, market);
+    // await this.publishUserOrderUpdates(order, executedQuantity, fills);
+    // await this.publishWsTrades(side, fills, market);
+    // await this.publishUserTradeUpdates(side, fills, market, takerUserId);
     return { executedQuantity, fills, orderId: order.orderId };
   }
   private async updateMarketBalance(
@@ -689,6 +724,16 @@ export class Engine {
     // TAKER / INCOMING ORDER UPDATE
     // -----------------------------
 
+    console.log("🔥 ENTER publishUserOrderUpdates", {
+      pid: process.pid,
+      orderId: order.orderId,
+      userId: order.userId,
+      executedQuantity,
+      fillsLength: fills.length,
+      fills,
+      orderType,
+    });
+
     let takerStatus: "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
     if (orderType === "market") {
       takerStatus = executedQuantity >= order.quantity ? "FILLED" : "CANCELLED";
@@ -721,6 +766,14 @@ export class Engine {
         fill.makerFilledQuantity >= fill.makerOrderQuantity
           ? "FILLED"
           : "PARTIALLY_FILLED";
+
+      console.log("🔥 MAKER ORDER UPDATE PUBLISH:", {
+        channel: `user_trades@${fill.makerUserId}`,
+        orderId: fill.makerOrderId,
+        filled: fill.makerFilledQuantity,
+        makerQuantity: fill.makerOrderQuantity,
+        status,
+      });
 
       RedisManager.getInstance().publishMessage(
         `user_trades@${fill.makerUserId}`,

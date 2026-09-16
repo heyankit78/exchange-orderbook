@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { WebSocket } from "ws";
 import jwt from "jsonwebtoken";
 
@@ -96,7 +97,10 @@ export class User {
 
       if (parsedMessage.method === AUTH) {
         try {
-          const payload = jwt.verify(parsedMessage.token, JWT_SECRET) as {
+          const payload = jwt.verify(
+            parsedMessage.token,
+            JWT_SECRET as string,
+          ) as {
             userId: string;
           };
 
