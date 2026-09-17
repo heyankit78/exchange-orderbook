@@ -357,37 +357,68 @@ export function TradeView({ market }: { market: string }) {
     <div className="flex h-full min-h-0 w-full flex-col bg-[#0e0f14]">
       {/* TIMEFRAME BAR */}
 
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-baseBorderLight px-3">
-        {TIMEFRAMES.map((timeframe) => (
-          <button
-            key={timeframe}
-            type="button"
-            onClick={() => setInterval(timeframe)}
-            className={`rounded px-3 py-1.5 text-xs font-medium transition ${
-              interval === timeframe
-                ? "bg-baseBackgroundL3 text-white"
-                : "text-baseTextMedEmphasis hover:bg-baseBackgroundL2 hover:text-white"
-            }`}
-          >
-            {timeframe}
-          </button>
-        ))}
+      <div
+        className="
+        flex h-11 shrink-0 items-center
+        border-b border-baseBorderLight
+        px-2
+        sm:px-3
+      "
+      >
+        {/* Scrollable timeframe section */}
 
-        {loading && (
-          <span className="ml-2 text-[11px] text-baseTextMedEmphasis">
-            Loading...
-          </span>
-        )}
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto no-scrollbar">
+          {TIMEFRAMES.map((timeframe) => (
+            <button
+              key={timeframe}
+              type="button"
+              onClick={() => setInterval(timeframe)}
+              className={`shrink-0 rounded px-3 py-1.5 text-xs font-medium transition ${
+                interval === timeframe
+                  ? "bg-baseBackgroundL3 text-white"
+                  : "text-baseTextMedEmphasis hover:bg-baseBackgroundL2 hover:text-white"
+              }`}
+            >
+              {timeframe}
+            </button>
+          ))}
+        </div>
 
-        {!loading && (
-          <span className="ml-auto text-[10px] text-green-400">● Live</span>
-        )}
+        {/* STATUS */}
+
+        <div className="ml-2 shrink-0">
+          {loading ? (
+            <span className="text-[10px] text-baseTextMedEmphasis sm:text-[11px]">
+              Loading...
+            </span>
+          ) : (
+            <span className="whitespace-nowrap text-[10px] text-green-400">
+              ● Live
+            </span>
+          )}
+        </div>
       </div>
 
       {/* CHART */}
 
-      <div className="min-h-0 flex-1">
-        <div ref={chartRef} className="h-full min-h-[400px] w-full" />
+      <div
+        className="
+        min-h-[320px] flex-1
+        sm:min-h-[380px]
+        md:min-h-[420px]
+        lg:min-h-0
+      "
+      >
+        <div
+          ref={chartRef}
+          className="
+          h-full w-full
+          min-h-[320px]
+          sm:min-h-[380px]
+          md:min-h-[420px]
+          lg:min-h-[500px]
+        "
+        />
       </div>
     </div>
   );

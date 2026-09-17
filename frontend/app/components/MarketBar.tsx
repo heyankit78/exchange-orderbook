@@ -24,7 +24,6 @@ export const MarketBar = ({ market }: { market: string }) => {
         console.error("Failed to load ticker:", error);
       });
 
-    // Live trade callback
     const callbackId = `MARKET-BAR-TRADE-${market}`;
 
     const handleTrade = (trade: {
@@ -40,8 +39,6 @@ export const MarketBar = ({ market }: { market: string }) => {
       if (trade.market !== market) {
         return;
       }
-
-      console.log("🔥 MARKET BAR LIVE TRADE:", trade);
 
       setTicker((prevTicker) => {
         if (!prevTicker) {
@@ -73,6 +70,7 @@ export const MarketBar = ({ market }: { market: string }) => {
       });
     };
   }, [market]);
+
   function formatNumber(value: string | number | undefined, decimals = 2) {
     const num = Number(value);
 
@@ -85,15 +83,49 @@ export const MarketBar = ({ market }: { market: string }) => {
       maximumFractionDigits: decimals,
     });
   }
+
+  const priceChange = Number(ticker?.priceChange ?? 0);
+
   return (
-    <div className="h-[61px] border-b border-baseBorderLight bg-baseBackgroundL1">
-      <div className="flex h-full items-center overflow-x-auto no-scrollbar px-3">
-        <div className="flex shrink-0 items-center">
+    <div className="border-b border-baseBorderLight bg-baseBackgroundL1">
+      <div
+        className="
+          mx-auto flex w-full flex-col
+          px-3 py-3
+          sm:px-4
+          lg:h-[61px] lg:flex-row lg:items-center lg:py-0
+        "
+      >
+        {/* MARKET + PRICE */}
+
+        <div className="flex items-center justify-between lg:justify-start">
           <Ticker market={market} />
+
+          {/* Mobile price */}
+          <div className="text-right lg:hidden">
+            <p className="text-lg font-semibold tabular-nums text-greenText">
+              {formatNumber(ticker?.lastPrice)}
+            </p>
+
+            <p className="text-[11px] text-baseTextMedEmphasis">Last Price</p>
+          </div>
         </div>
 
-        <div className="ml-5 flex h-full items-center gap-8">
-          <div className="flex min-w-[100px] flex-col justify-center">
+        {/* STATS */}
+
+        <div
+          className="
+            mt-3 grid grid-cols-2 gap-x-5 gap-y-4
+            border-t border-baseBorderLight pt-3
+            sm:grid-cols-4
+            lg:ml-7 lg:mt-0 lg:flex lg:h-full
+            lg:flex-1 lg:items-center lg:gap-8
+            lg:border-t-0 lg:pt-0
+          "
+        >
+          {/* Desktop price */}
+
+          <div className="hidden min-w-[110px] flex-col justify-center lg:flex">
             <p className="text-lg font-semibold tabular-nums text-greenText">
               {formatNumber(ticker?.lastPrice)}
             </p>
@@ -103,84 +135,101 @@ export const MarketBar = ({ market }: { market: string }) => {
             </p>
           </div>
 
-          <div className="flex flex-col justify-center">
-            <p className="text-[11px] text-baseTextMedEmphasis">24H Change</p>
+          {/* CHANGE */}
+
+          <StatItem label="24H Change">
             <p
               className={`mt-1 text-xs font-medium tabular-nums ${
-                Number(ticker?.priceChange) >= 0
-                  ? "text-greenText"
-                  : "text-redText"
+                priceChange >= 0 ? "text-greenText" : "text-redText"
               }`}
             >
-              {Number(ticker?.priceChange) >= 0 ? "+" : ""}
+              {priceChange >= 0 ? "+" : ""}
               {formatNumber(ticker?.priceChange)}{" "}
               {ticker?.priceChangePercent
                 ? `(${Number(ticker.priceChangePercent).toFixed(2)}%)`
                 : "--"}
             </p>
-          </div>
+          </StatItem>
 
-          <div className="flex flex-col justify-center">
-            <p className="text-[11px] text-baseTextMedEmphasis">24H High</p>
+          {/* HIGH */}
 
+          <StatItem label="24H High">
             <p className="mt-1 text-xs font-medium tabular-nums text-baseTextHighEmphasis">
-              {ticker?.high || "--"}
+              {formatNumber(ticker?.high)}
             </p>
-          </div>
+          </StatItem>
 
-          <div className="flex flex-col justify-center">
-            <p className="text-[11px] text-baseTextMedEmphasis">24H Low</p>
+          {/* LOW */}
 
+          <StatItem label="24H Low">
             <p className="mt-1 text-xs font-medium tabular-nums text-baseTextHighEmphasis">
-              {ticker?.low || "--"}
+              {formatNumber(ticker?.low)}
             </p>
-          </div>
+          </StatItem>
 
-          <div className="flex flex-col justify-center">
-            <p className="text-[11px] text-baseTextMedEmphasis">24H Volume</p>
+          {/* VOLUME */}
 
+          <StatItem label="24H Volume">
             <p className="mt-1 text-xs font-medium tabular-nums text-baseTextHighEmphasis">
-              {ticker?.volume || "--"}
+              {formatNumber(ticker?.volume, 4)}
             </p>
-          </div>
+          </StatItem>
         </div>
       </div>
     </div>
   );
 };
 
-function Ticker({ market }: { market: string }) {
+function StatItem({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex h-[60px] shrink-0 space-x-4">
-      <div className="flex flex-row relative ml-2 -mr-4">
+    <div className="flex min-w-0 flex-col justify-center">
+      <p className="text-[10px] text-baseTextMedEmphasis sm:text-[11px]">
+        {label}
+      </p>
+
+      {children}
+    </div>
+  );
+}
+
+function Ticker({ market }: { market: string }) {
+  const [base, quote] = market.split("_");
+
+  return (
+    <div className="flex shrink-0 items-center gap-3">
+      {/* LOGOS */}
+
+      <div className="flex items-center">
         <img
-          alt="Base Logo"
+          alt={`${base} Logo`}
           loading="lazy"
           decoding="async"
-          className="z-10 rounded-full h-6 w-6 mt-4 outline-baseBackgroundL1"
+          className="z-10 h-7 w-7 rounded-full border-2 border-baseBackgroundL1"
           src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTVvBqZC_Q1TSYObZaMvK0DRFeHZDUtVMh08Q&s"
         />
 
         <img
-          alt="USDC Logo"
+          alt={`${quote} Logo`}
           loading="lazy"
           decoding="async"
-          className="h-6 w-6 -ml-2 mt-4 rounded-full"
+          className="-ml-2 h-7 w-7 rounded-full border-2 border-baseBackgroundL1"
           src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTVvBqZC_Q1TSYObZaMvK0DRFeHZDUtVMh08Q&s"
         />
       </div>
 
-      <button type="button" className="react-aria-Button">
-        <div className="flex items-center justify-between flex-row cursor-pointer rounded-lg p-3 hover:opacity-80">
-          <div className="flex items-center flex-row gap-2">
-            <div className="flex flex-row relative">
-              <p className="font-medium text-sm">
-                {market.replace("_", " / ")}
-              </p>
-            </div>
-          </div>
-        </div>
-      </button>
+      <div>
+        <p className="text-sm font-semibold text-baseTextHighEmphasis">
+          {base} / {quote}
+        </p>
+
+        <p className="text-[10px] text-baseTextMedEmphasis">Spot</p>
+      </div>
     </div>
   );
 }

@@ -27,7 +27,10 @@ const features = [
 
 export function TechnicalSection() {
   return (
-    <section id="architecture" className="border-b border-baseBorderLight py-24">
+    <section
+      id="architecture"
+      className="border-b border-baseBorderLight py-24"
+    >
       <div className="mx-auto w-full max-w-7xl px-5 lg:px-8">
         <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
           <div>
@@ -77,8 +80,14 @@ export function TechnicalSection() {
           </div>
 
           <div className="grid gap-3 border-t border-baseBorderLight p-5 md:grid-cols-2">
-            <FlowNode label="WebSocket Server" detail="Depth, trades, private updates" />
-            <FlowNode label="DB Worker" detail="PostgreSQL + TimescaleDB persistence" />
+            <FlowNode
+              label="WebSocket Server"
+              detail="Depth, trades, private updates"
+            />
+            <FlowNode
+              label="DB Worker"
+              detail="PostgreSQL + TimescaleDB persistence"
+            />
           </div>
         </div>
       </div>
@@ -89,7 +98,9 @@ export function TechnicalSection() {
 function FlowNode({ label, detail }: { label: string; detail: string }) {
   return (
     <div className="rounded-lg border border-baseBorderLight bg-baseBackgroundL1 px-4 py-4">
-      <div className="text-sm font-semibold text-baseTextHighEmphasis">{label}</div>
+      <div className="text-sm font-semibold text-baseTextHighEmphasis">
+        {label}
+      </div>
       <div className="mt-1 text-xs text-baseTextMedEmphasis">{detail}</div>
     </div>
   );
@@ -97,6 +108,8 @@ function FlowNode({ label, detail }: { label: string; detail: string }) {
 
 function Arrow() {
   return (
-    <div className="hidden text-center text-baseTextMedEmphasis md:block">→</div>
+    <div className="hidden text-center text-baseTextMedEmphasis md:block">
+      →
+    </div>
   );
 }

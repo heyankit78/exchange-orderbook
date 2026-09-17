@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { MARKETS } from "@repo/shared";
 
-import { Ticker } from "../utils/types";
+import type { Ticker } from "../utils/types";
 import { getTickers } from "../utils/httpClient";
 import { SignalingManager } from "../utils/SignalingManager";
 
@@ -24,10 +24,6 @@ export const Markets = () => {
   useEffect(() => {
     const signalingManager = SignalingManager.getInstance();
 
-    // -----------------------------------------
-    // 1. INITIAL REST SNAPSHOT
-    // -----------------------------------------
-
     const loadTickers = async () => {
       try {
         const data = await getTickers();
@@ -43,10 +39,6 @@ export const Markets = () => {
     };
 
     loadTickers();
-
-    // -----------------------------------------
-    // 2. LIVE TICKER CALLBACK
-    // -----------------------------------------
 
     const callbackId = "MARKETS_TICKER_LIST";
 
@@ -64,7 +56,6 @@ export const Markets = () => {
           (ticker) => ticker.symbol === updatedTicker.symbol,
         );
 
-        // Existing market → merge update
         if (exists) {
           return previous.map((ticker) =>
             ticker.symbol === updatedTicker.symbol
@@ -76,16 +67,11 @@ export const Markets = () => {
           );
         }
 
-        // First ticker event before REST returned
         return [...previous, updatedTicker as Ticker];
       });
     };
 
     signalingManager.registerCallback("ticker", handleTicker, callbackId);
-
-    // -----------------------------------------
-    // 3. SUBSCRIBE ALL 3 MARKETS
-    // -----------------------------------------
 
     const channels = ACTIVE_MARKETS.map((market) => `ticker@${market}`);
 
@@ -93,12 +79,6 @@ export const Markets = () => {
       method: "SUBSCRIBE",
       params: channels,
     });
-
-    console.log("📡 Markets subscribed:", channels);
-
-    // -----------------------------------------
-    // 4. CLEANUP
-    // -----------------------------------------
 
     return () => {
       void signalingManager.deRegisterCallback("ticker", callbackId);
@@ -115,19 +95,21 @@ export const Markets = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#0e0f14] px-4 py-6">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-6">
-          <h1 className="mb-1 text-2xl font-bold text-white">Markets</h1>
+    <div className="min-h-screen bg-[#0e0f14] px-3 py-5 sm:px-5 sm:py-6 lg:px-8">
+      <div className="mx-auto w-full max-w-6xl">
+        {/* HEADER */}
 
-          <p className="text-sm text-baseTextMedEmphasis">
+        <div className="mb-5 sm:mb-6">
+          <h1 className="text-xl font-bold text-white sm:text-2xl">Markets</h1>
+
+          <p className="mt-1 text-xs text-baseTextMedEmphasis sm:text-sm">
             Trade your favourite assets
           </p>
         </div>
 
         {/* SEARCH */}
 
-        <div className="relative mb-4 max-w-sm">
+        <div className="relative mb-4 w-full sm:max-w-sm">
           <svg
             className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-baseTextMedEmphasis"
             fill="none"
@@ -147,43 +129,144 @@ export const Markets = () => {
             placeholder="Search market..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-9 w-full rounded-lg border border-baseBorderLight bg-baseBackgroundL1 pl-9 pr-4 text-sm text-white placeholder-baseTextMedEmphasis transition focus:border-accentBlue focus:outline-none"
+            className="
+              h-10 w-full rounded-lg
+              border border-baseBorderLight
+              bg-baseBackgroundL1
+              pl-9 pr-4
+              text-sm text-white
+              placeholder-baseTextMedEmphasis
+              transition
+              focus:border-accentBlue
+              focus:outline-none
+            "
           />
         </div>
 
-        {/* TABLE */}
+        {/* ================================= */}
+        {/* MOBILE CARDS */}
+        {/* ================================= */}
 
-        <div className="overflow-hidden rounded-xl border border-baseBorderLight bg-baseBackgroundL1">
-          <table className="w-full">
+        <div className="space-y-2 md:hidden">
+          {filtered.length === 0 && (
+            <div className="rounded-xl border border-baseBorderLight bg-baseBackgroundL1 py-16 text-center text-sm text-baseTextMedEmphasis">
+              No markets found
+            </div>
+          )}
+
+          {filtered.map((market) => {
+            const change = Number(market.priceChangePercent ?? 0);
+
+            const isPositive = change >= 0;
+
+            const [base, quote] = market.symbol.split("_");
+
+            return (
+              <button
+                key={market.symbol}
+                type="button"
+                onClick={() => router.push(`/trade/${market.symbol}`)}
+                className="
+                  w-full rounded-xl
+                  border border-baseBorderLight
+                  bg-baseBackgroundL1
+                  p-4 text-left
+                  transition
+                  active:scale-[0.99]
+                  hover:bg-baseBackgroundL2
+                "
+              >
+                {/* TOP */}
+
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-baseBackgroundL2 text-sm font-bold text-white">
+                      {base?.[0]}
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">
+                        {base}
+                      </p>
+
+                      <p className="text-xs text-baseTextMedEmphasis">
+                        {base}/{quote}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-sm font-semibold tabular-nums text-white">
+                      {Number(market.lastPrice ?? 0).toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+
+                    <span
+                      className={`mt-1 inline-block rounded px-2 py-0.5 text-xs font-medium ${
+                        isPositive
+                          ? "bg-greenBackgroundTransparent text-greenText"
+                          : "bg-redBackgroundTransparent text-redText"
+                      }`}
+                    >
+                      {isPositive ? "+" : ""}
+                      {change.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* BOTTOM */}
+
+                <div className="mt-4 grid grid-cols-3 gap-3 border-t border-baseBorderLight pt-3">
+                  <MobileMetric
+                    label="24H High"
+                    value={Number(market.high ?? 0).toLocaleString(undefined, {
+                      maximumFractionDigits: 2,
+                    })}
+                  />
+
+                  <MobileMetric
+                    label="24H Low"
+                    value={Number(market.low ?? 0).toLocaleString(undefined, {
+                      maximumFractionDigits: 2,
+                    })}
+                  />
+
+                  <MobileMetric
+                    label="Volume"
+                    value={Number(market.volume ?? 0).toLocaleString(
+                      undefined,
+                      {
+                        maximumFractionDigits: 2,
+                      },
+                    )}
+                  />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ================================= */}
+        {/* TABLET / DESKTOP TABLE */}
+        {/* ================================= */}
+
+        <div className="hidden overflow-x-auto rounded-xl border border-baseBorderLight bg-baseBackgroundL1 md:block">
+          <table className="w-full min-w-[850px]">
             <thead>
               <tr className="border-b border-baseBorderLight">
-                <th className="px-6 py-3 text-left text-xs font-medium text-baseTextMedEmphasis">
-                  #
-                </th>
+                <TableHeader>#</TableHeader>
+                <TableHeader>Name</TableHeader>
 
-                <th className="px-4 py-3 text-left text-xs font-medium text-baseTextMedEmphasis">
-                  Name
-                </th>
+                <TableHeader align="right">Price</TableHeader>
 
-                <th className="px-4 py-3 text-right text-xs font-medium text-baseTextMedEmphasis">
-                  Price
-                </th>
+                <TableHeader align="right">24h Change</TableHeader>
 
-                <th className="px-4 py-3 text-right text-xs font-medium text-baseTextMedEmphasis">
-                  24h Change
-                </th>
+                <TableHeader align="right">24h High</TableHeader>
 
-                <th className="px-4 py-3 text-right text-xs font-medium text-baseTextMedEmphasis">
-                  24h High
-                </th>
+                <TableHeader align="right">24h Low</TableHeader>
 
-                <th className="px-4 py-3 text-right text-xs font-medium text-baseTextMedEmphasis">
-                  24h Low
-                </th>
-
-                <th className="px-6 py-3 text-right text-xs font-medium text-baseTextMedEmphasis">
-                  Volume
-                </th>
+                <TableHeader align="right">Volume</TableHeader>
               </tr>
             </thead>
 
@@ -212,7 +295,7 @@ export const Markets = () => {
                     onClick={() => router.push(`/trade/${market.symbol}`)}
                     className="cursor-pointer border-b border-baseBorderLight transition-colors last:border-0 hover:bg-baseBackgroundL2"
                   >
-                    <td className="px-6 py-4 text-sm text-baseTextMedEmphasis">
+                    <td className="px-4 py-4 text-sm text-baseTextMedEmphasis lg:px-6">
                       {index + 1}
                     </td>
 
@@ -234,8 +317,6 @@ export const Markets = () => {
                       </div>
                     </td>
 
-                    {/* PRICE */}
-
                     <td className="px-4 py-4 text-right">
                       <p className="tabular-nums text-sm font-medium text-white">
                         {Number(market.lastPrice ?? 0).toLocaleString(
@@ -251,8 +332,6 @@ export const Markets = () => {
                       </p>
                     </td>
 
-                    {/* CHANGE */}
-
                     <td className="px-4 py-4 text-right">
                       <span
                         className={`inline-block rounded px-2 py-0.5 text-sm font-medium tabular-nums ${
@@ -266,15 +345,11 @@ export const Markets = () => {
                       </span>
                     </td>
 
-                    {/* HIGH */}
-
                     <td className="px-4 py-4 text-right text-sm tabular-nums text-baseTextMedEmphasis">
                       {Number(market.high ?? 0).toLocaleString(undefined, {
                         maximumFractionDigits: 2,
                       })}
                     </td>
-
-                    {/* LOW */}
 
                     <td className="px-4 py-4 text-right text-sm tabular-nums text-baseTextMedEmphasis">
                       {Number(market.low ?? 0).toLocaleString(undefined, {
@@ -282,9 +357,7 @@ export const Markets = () => {
                       })}
                     </td>
 
-                    {/* VOLUME */}
-
-                    <td className="px-6 py-4 text-right text-sm tabular-nums text-baseTextMedEmphasis">
+                    <td className="px-4 py-4 text-right text-sm tabular-nums text-baseTextMedEmphasis lg:px-6">
                       {Number(market.volume ?? 0).toLocaleString(undefined, {
                         maximumFractionDigits: 4,
                       })}
@@ -299,3 +372,33 @@ export const Markets = () => {
     </div>
   );
 };
+
+function MobileMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] text-baseTextMedEmphasis">{label}</p>
+
+      <p className="mt-1 truncate text-xs font-medium tabular-nums text-white">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function TableHeader({
+  children,
+  align = "left",
+}: {
+  children: React.ReactNode;
+  align?: "left" | "right";
+}) {
+  return (
+    <th
+      className={`px-4 py-3 text-xs font-medium text-baseTextMedEmphasis ${
+        align === "right" ? "text-right" : "text-left"
+      }`}
+    >
+      {children}
+    </th>
+  );
+}

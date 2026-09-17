@@ -155,15 +155,15 @@ export function OrderBookView({
         {filter === "all" && price && (
           <div
             ref={middlePriceRef}
-            className="flex items-center gap-2 border-y border-baseBorderLight bg-baseBackgroundL2 px-3 py-3"
+            className="flex items-center gap-2 border-y border-baseBorderLight bg-baseBackgroundL2 px-3 py-3 sm:py-3"
           >
-            <span className="text-xl font-semibold text-greenText">
+            <span className="text-2xl sm:text-xl font-bold sm:font-semibold text-greenText tabular-nums">
               {Number(price).toFixed(2)}
             </span>
 
-            <span className="text-xs text-greenText">▲</span>
+            <span className="text-sm sm:text-xs text-greenText">▲</span>
 
-            <span className="ml-1 text-xs text-baseTextMedEmphasis">
+            <span className="ml-1 text-[11px] sm:text-xs uppercase tracking-wider text-baseTextMedEmphasis">
               Last Price
             </span>
           </div>

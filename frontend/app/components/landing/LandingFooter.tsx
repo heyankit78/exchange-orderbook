@@ -16,7 +16,10 @@ export function LandingFooter() {
           </div>
 
           <div className="flex flex-wrap gap-5 text-sm text-baseTextMedEmphasis">
-            <a href="#about" className="transition hover:text-baseTextHighEmphasis">
+            <a
+              href="#about"
+              className="transition hover:text-baseTextHighEmphasis"
+            >
               About
             </a>
             <a
@@ -36,7 +39,10 @@ export function LandingFooter() {
 
         <div className="flex flex-col gap-3 pt-6 text-[11px] leading-5 text-baseTextMedEmphasis md:flex-row md:items-center md:justify-between">
           <span>© 2026 Exchange. Built for learning and demonstration.</span>
-          <span>Trading interfaces involve financial risk. This project is not financial advice.</span>
+          <span>
+            Trading interfaces involve financial risk. This project is not
+            financial advice.
+          </span>
         </div>
       </div>
     </footer>

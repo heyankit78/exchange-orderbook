@@ -59,7 +59,9 @@ export function OrderBookPreview() {
 
       <div className="flex items-center justify-between border-y border-baseBorderLight bg-baseBackgroundL2 px-4 py-4">
         <div className="flex items-baseline gap-2">
-          <span className="text-2xl font-semibold text-greenText">77,357.17</span>
+          <span className="text-2xl font-semibold text-greenText">
+            77,357.17
+          </span>
           <span className="text-xs text-greenText">▲</span>
         </div>
         <span className="text-[10px] uppercase tracking-[0.15em] text-baseTextMedEmphasis">
@@ -127,8 +129,12 @@ function BookRow({
       >
         {price}
       </span>
-      <span className="relative text-right text-baseTextHighEmphasis">{size}</span>
-      <span className="relative text-right text-baseTextMedEmphasis">{total}</span>
+      <span className="relative text-right text-baseTextHighEmphasis">
+        {size}
+      </span>
+      <span className="relative text-right text-baseTextMedEmphasis">
+        {total}
+      </span>
     </div>
   );
 }
