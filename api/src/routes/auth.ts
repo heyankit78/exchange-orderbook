@@ -2,6 +2,7 @@ import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { Client } from "pg";
 import crypto from "crypto";
+import bcrypt from "bcrypt";
 import { RedisManager } from "../RedisManager";
 import { ON_RAMP } from "@repo/shared";
 
@@ -10,15 +11,21 @@ export const authRouter = Router();
 const pgClient = new Client({
   connectionString: process.env.DATABASE_URL,
 });
+
 pgClient.connect();
 
-function hashPassword(password: string): string {
-  return crypto.createHash("sha256").update(password).digest("hex");
-}
-
 const JWT_SECRET = process.env.JWT_SECRET;
-
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
+
+function isStrongPassword(password: string): boolean {
+  return (
+    password.length >= 8 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /[0-9]/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+  );
+}
 
 function createAccessToken(user: { id: string | number; email: string }) {
   return jwt.sign(
@@ -47,29 +54,43 @@ function createRefreshToken(user: { id: string | number; email: string }) {
     },
   );
 }
+
+/* =========================
+   REGISTER
+========================= */
+
 authRouter.post("/register", async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    return res.status(400).json({ message: "Email and password are required" });
+    return res.status(400).json({
+      message: "Email and password are required",
+    });
   }
-  if (password.length < 6) {
-    return res
-      .status(400)
-      .json({ message: "Password must be at least 6 characters" });
+
+  if (!isStrongPassword(password)) {
+    return res.status(400).json({
+      message:
+        "Password must be at least 8 characters and contain uppercase, lowercase, number and special character",
+    });
   }
 
   try {
-    const hash = hashPassword(password);
+    // Hash password using bcrypt
+    const passwordHash = await bcrypt.hash(password, 12);
+
     const result = await pgClient.query(
-      "INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email",
-      [email, hash],
+      `INSERT INTO users (email, password_hash)
+       VALUES ($1, $2)
+       RETURNING id, email`,
+      [email, passwordHash],
     );
+
     const user = result.rows[0];
     const userId = String(user.id);
 
     // Tell engine to give this user initial balance
-    RedisManager.getInstance().sendAndAwait({
+    await RedisManager.getInstance().sendAndAwait({
       type: ON_RAMP,
       data: {
         userId,
@@ -80,16 +101,6 @@ authRouter.post("/register", async (req, res) => {
     });
 
     console.log(`User registered: ${email} (id: ${userId})`);
-    // const token = jwt.sign(
-    //   {
-    //     userId,
-    //     email: user.email,
-    //   },
-    //   JWT_SECRET,
-    //   {
-    //     expiresIn: "1h",
-    //   },
-    // );
 
     const accessToken = createAccessToken(user);
     const refreshToken = createRefreshToken(user);
@@ -105,12 +116,23 @@ authRouter.post("/register", async (req, res) => {
     });
   } catch (e: any) {
     if (e.code === "23505") {
-      return res.status(409).json({ message: "Email already registered" });
+      return res.status(409).json({
+        message: "Email already registered",
+      });
     }
+
     console.error("Register error:", e);
-    return res.status(500).json({ message: "Server error" });
+
+    return res.status(500).json({
+      message: "Server error",
+    });
   }
 });
+
+/* =========================
+   REFRESH TOKEN
+========================= */
+
 authRouter.post("/refresh", async (req, res) => {
   const { refreshToken } = req.body;
 
@@ -154,40 +176,51 @@ authRouter.post("/refresh", async (req, res) => {
     });
   }
 });
+
+/* =========================
+   LOGIN
+========================= */
+
 authRouter.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    return res.status(400).json({ message: "Email and password are required" });
+    return res.status(400).json({
+      message: "Email and password are required",
+    });
   }
 
   try {
-    const hash = hashPassword(password);
+    // Get user by email first
     const result = await pgClient.query(
-      "SELECT id, email FROM users WHERE email = $1 AND password_hash = $2",
-      [email, hash],
+      `SELECT id, email, password_hash
+       FROM users
+       WHERE email = $1`,
+      [email],
     );
 
     if (result.rows.length === 0) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({
+        message: "Invalid email or password",
+      });
     }
 
     const user = result.rows[0];
+
+    // Compare plain password with bcrypt hash
+    const passwordMatches = await bcrypt.compare(password, user.password_hash);
+
+    if (!passwordMatches) {
+      return res.status(401).json({
+        message: "Invalid email or password",
+      });
+    }
+
     console.log(`User logged in: ${email} (id: ${user.id})`);
 
-    // const token = jwt.sign(
-    //   {
-    //     userId: String(user.id),
-    //     email: user.email,
-    //   },
-    //   JWT_SECRET,
-    //   {
-    //     expiresIn: "1h",
-    //   },
-    // );
     const accessToken = createAccessToken(user);
     const refreshToken = createRefreshToken(user);
-    console.log(`User logged in: ${email} (id: ${user.id})`);
+
     return res.json({
       accessToken,
       refreshToken,
@@ -199,6 +232,9 @@ authRouter.post("/login", async (req, res) => {
     });
   } catch (e) {
     console.error("Login error:", e);
-    return res.status(500).json({ message: "Server error" });
+
+    return res.status(500).json({
+      message: "Server error",
+    });
   }
 });

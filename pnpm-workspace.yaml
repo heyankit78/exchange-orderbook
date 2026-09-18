@@ -7,6 +7,7 @@ packages:
   - "frontend"
   - "packages/*"
 allowBuilds:
+  bcrypt: set this to true or false
   bufferutil: true
   esbuild: true
   unrs-resolver: true

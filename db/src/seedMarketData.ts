@@ -1,13 +1,15 @@
-// import { MARKETS } from "@repo/shared";
+import "dotenv/config";
 import { MARKETS } from "@repo/shared";
 import { Client } from "pg";
 
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  throw new Error("DATABASE_URL is not defined");
+}
+
 const client = new Client({
-  user: "your_user",
-  host: "localhost",
-  database: "my_database",
-  password: "your_password",
-  port: 5432,
+  connectionString: DATABASE_URL,
 });
 
 const MARKET_CONFIGS = Object.values(MARKETS);
