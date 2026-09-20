@@ -28,25 +28,96 @@ const ACTIVE_MARKETS = [MARKETS.BTC_USDC, MARKETS.ETH_USDC, MARKETS.SOL_USDC];
 
 type MarketConfig = (typeof ACTIVE_MARKETS)[number];
 
-async function login(email: string, password: string) {
-  const response = await axios.post(`${BASE_URL}/api/v1/auth/login`, {
-    email,
-    password,
-  });
+type BotSession = {
+  email: string;
+  password: string;
+  accessToken: string;
+};
 
-  return response.data.accessToken;
+async function login(session: BotSession): Promise<void> {
+  const response = await axios.post(
+    `${BASE_URL}/api/v1/auth/login`,
+    {
+      email: session.email,
+      password: session.password,
+    },
+    {
+      timeout: 10_000,
+    },
+  );
+
+  const accessToken = response.data.accessToken;
+
+  if (!accessToken) {
+    throw new Error("Login succeeded but no access token was returned");
+  }
+
+  session.accessToken = accessToken;
+  console.log(`✅ Bot logged in: ${session.email}`);
+}
+
+let reloginPromise: Promise<void> | null = null;
+
+async function reloginBots(
+  mmSession: BotSession,
+  takerSession: BotSession,
+): Promise<void> {
+  if (!reloginPromise) {
+    console.log("🔄 Bot token expired; logging in again");
+
+    reloginPromise = Promise.all([login(mmSession), login(takerSession)])
+      .then(() => {
+        console.log("✅ Bot authentication restored");
+      })
+      .finally(() => {
+        reloginPromise = null;
+      });
+  }
+
+  await reloginPromise;
+}
+
+async function runWithReauthentication<T>(
+  operation: () => Promise<T>,
+  mmSession: BotSession,
+  takerSession: BotSession,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    const isUnauthorized =
+      axios.isAxiosError(error) && error.response?.status === 401;
+
+    if (!isUnauthorized) {
+      throw error;
+    }
+
+    await reloginBots(mmSession, takerSession);
+
+    // Retry the failed market cycle once with the new tokens.
+    return operation();
+  }
 }
 
 async function runMarketLoop(
   config: MarketConfig,
-  mmToken: string,
-  takerToken: string,
+  mmSession: BotSession,
+  takerSession: BotSession,
 ) {
   console.log(`🚀 Starting market loop for ${config.symbol}`);
 
   while (true) {
     try {
-      await maintainMarket(config, mmToken, takerToken);
+      await runWithReauthentication(
+        () =>
+          maintainMarket(
+            config,
+            mmSession.accessToken,
+            takerSession.accessToken,
+          ),
+        mmSession,
+        takerSession,
+      );
     } catch (error: any) {
       console.error(
         `❌ ${config.symbol} market loop error:`,
@@ -335,16 +406,25 @@ function sleep(ms: number) {
 }
 
 async function start() {
-  const mmToken = await login(MM_EMAIL, MM_PASSWORD);
+  const mmSession: BotSession = {
+    email: MM_EMAIL,
+    password: MM_PASSWORD,
+    accessToken: "",
+  };
 
-  console.log("✅ Market maker logged in");
+  const takerSession: BotSession = {
+    email: TAKER_EMAIL,
+    password: TAKER_PASSWORD,
+    accessToken: "",
+  };
 
-  const takerToken = await login(TAKER_EMAIL, TAKER_PASSWORD);
-
-  console.log("✅ Taker bot logged in");
+  await Promise.all([login(mmSession), login(takerSession)]);
 
   if (process.env.SEED_BOT_BALANCES === "true") {
-    await seedBotBalances(mmToken, takerToken);
+    await seedBotBalances(
+      mmSession.accessToken,
+      takerSession.accessToken,
+    );
     console.log("✅ Bot balances ready");
   } else {
     console.log("ℹ️ Bot balance seeding skipped");
@@ -355,10 +435,13 @@ async function start() {
   );
 
   await Promise.all(
-    ACTIVE_MARKETS.map((config) => runMarketLoop(config, mmToken, takerToken)),
+    ACTIVE_MARKETS.map((config) =>
+      runMarketLoop(config, mmSession, takerSession),
+    ),
   );
 }
 
 start().catch((error) => {
   console.error("❌ MM crashed:", error?.response?.data || error);
+  process.exit(1);
 });
