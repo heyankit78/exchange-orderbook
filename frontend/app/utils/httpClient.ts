@@ -1,9 +1,9 @@
 import axios from "axios";
 import { Balances, Depth, KLine, Ticker, Trade, OpenOrder } from "./types";
-
-function requiredPublicEnv(name: string): string {
-  const value = process.env[name];
-
+function requiredPublicEnv(
+  value: string | undefined,
+  name: string,
+): string {
   if (!value) {
     throw new Error(`${name} is missing`);
   }
@@ -11,7 +11,10 @@ function requiredPublicEnv(name: string): string {
   return value;
 }
 
-const API_URL = requiredPublicEnv("NEXT_PUBLIC_API_URL");
+const API_URL = requiredPublicEnv(
+  process.env.NEXT_PUBLIC_API_URL,
+  "NEXT_PUBLIC_API_URL",
+);
 
 const api = axios.create({
   baseURL: API_URL,
