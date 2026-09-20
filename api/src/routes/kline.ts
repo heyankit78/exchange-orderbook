@@ -100,6 +100,7 @@ klineRouter.get("/", async (req, res) => {
           AND bucket <= $3
         ORDER BY bucket ASC
       `;
+      break;
     case "5m":
       query = `
     SELECT

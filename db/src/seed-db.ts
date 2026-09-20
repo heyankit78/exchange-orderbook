@@ -106,6 +106,10 @@ CREATE TABLE IF NOT EXISTS orders (
   console.log("trades table ready");
 
   await client.query(`
+  CREATE EXTENSION IF NOT EXISTS timescaledb;
+`);
+
+  await client.query(`
   CREATE TABLE IF NOT EXISTS market_prices (
     time TIMESTAMPTZ NOT NULL,
     price DOUBLE PRECISION NOT NULL,
@@ -236,4 +240,7 @@ CREATE TABLE IF NOT EXISTS orders (
   console.log("Database initialized successfully");
 }
 
-initializeDB().catch(console.error);
+initializeDB().catch((error) => {
+  console.error("Database initialization failed:", error);
+  process.exit(1);
+});

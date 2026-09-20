@@ -22,6 +22,48 @@ orderRouter.post("/", async (req: AuthRequest, res) => {
 
   const userId = req.user!.userId;
 
+  if (!market || !quantity || !side) {
+    return res.status(400).json({
+      message: "market, quantity and side are required",
+    });
+  }
+
+  if (!["buy", "sell"].includes(side)) {
+    return res.status(400).json({
+      message: "Invalid side",
+    });
+  }
+
+  if (!["limit", "market"].includes(orderType)) {
+    return res.status(400).json({
+      message: "Invalid order type",
+    });
+  }
+
+  if (orderType === "limit" && !price) {
+    return res.status(400).json({
+      message: "price is required for limit orders",
+    });
+  }
+
+  const numericQuantity = Number(quantity);
+
+  if (!Number.isFinite(numericQuantity) || numericQuantity <= 0) {
+    return res.status(400).json({
+      message: "Quantity must be greater than zero",
+    });
+  }
+
+  if (price !== undefined) {
+    const numericPrice = Number(price);
+
+    if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+      return res.status(400).json({
+        message: "Price must be greater than zero",
+      });
+    }
+  }
+
   const response = (await RedisManager.getInstance().sendAndAwait({
     type: CREATE_ORDER,
     data: {
@@ -33,29 +75,6 @@ orderRouter.post("/", async (req: AuthRequest, res) => {
       userId,
     },
   })) as MessageToApi;
-
-  if (orderType === "limit" && !price) {
-    return res.status(400).json({
-      message: "price is required for limit orders",
-    });
-  }
-
-  if (orderType !== "limit" && orderType !== "market") {
-    return res.status(400).json({
-      message: "Invalid order type",
-    });
-  }
-  if (response.type === "ORDER_CANCELLED") {
-    return res.status(400).json({
-      message: response.payload.error ?? "Order rejected",
-    });
-  }
-
-  if (response.type !== "ORDER_PLACED") {
-    return res.status(500).json({
-      message: "Unexpected response from engine",
-    });
-  }
 
   return res.json(response.payload);
 });

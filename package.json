@@ -21,7 +21,8 @@
     "build:engine": "npm run build -w engine",
     "build:api": "npm run build -w api",
     "build:db": "npm run build -w db",
-    "build:ws": "npm run build -w ws"
+    "build:ws": "npm run build -w ws",
+    "build:mm": "npm run build -w mm"
   },
   "dependencies": {
     "react-window": "^2.3.1"

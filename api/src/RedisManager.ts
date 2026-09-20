@@ -45,23 +45,30 @@ export class RedisManager {
     return new Promise(async (resolve, reject) => {
       const id = this.getRandomClientId();
 
-      try {
-        await this.client.subscribe(id, (message) => {
-          this.client.unsubscribe(id);
+      const timeout = setTimeout(async () => {
+        try {
+          await this.client.unsubscribe(id);
+        } finally {
+          reject(new Error("Matching engine request timed out"));
+        }
+      }, 10_000);
 
-          resolve(JSON.parse(message));
+      try {
+        await this.client.subscribe(id, async (response) => {
+          clearTimeout(timeout);
+          await this.client.unsubscribe(id);
+          resolve(JSON.parse(response));
         });
 
-        const streamId = await this.publisher.xAdd("messages", "*", {
+        await this.publisher.xAdd("messages", "*", {
           message: JSON.stringify({
             clientId: id,
             message,
           }),
         });
-
-        console.log("Added to stream:", streamId);
-      } catch (err) {
-        reject(err);
+      } catch (error) {
+        clearTimeout(timeout);
+        reject(error);
       }
     });
   }

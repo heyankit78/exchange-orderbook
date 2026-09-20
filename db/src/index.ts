@@ -329,7 +329,9 @@ async function processStreamMessage(
     // }
 
     await redisClient.xAck("db_stream", "db-group", streamId);
-
+    await redisClient.xTrim("db_stream", "MAXLEN", 50_000, {
+      strategyModifier: "~",
+    });
     console.log("DB EVENT ACKED:", {
       streamId,
       type: data.type,

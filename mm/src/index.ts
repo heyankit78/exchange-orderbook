@@ -3,20 +3,26 @@ import axios from "axios";
 import { MARKETS } from "@repo/shared";
 import { seedBotBalances } from "./seedBotBalances";
 
-const BASE_URL = process.env.API_URL;
+function requiredEnv(name: string): string {
+  const value = process.env[name];
 
-const MM_EMAIL = process.env.MM_EMAIL;
-const MM_PASSWORD = process.env.MM_PASSWORD;
+  if (!value) {
+    throw new Error(`${name} is missing`);
+  }
 
-const TAKER_EMAIL = process.env.TAKER_EMAIL;
-const TAKER_PASSWORD = process.env.TAKER_PASSWORD;
-
-if (!BASE_URL || !MM_EMAIL || !MM_PASSWORD || !TAKER_EMAIL || !TAKER_PASSWORD) {
-  throw new Error("Missing MM environment variables");
+  return value;
 }
 
-const TOTAL_BIDS = 15;
-const TOTAL_ASKS = 15;
+const BASE_URL = requiredEnv("API_URL");
+const MM_EMAIL = requiredEnv("MM_EMAIL");
+const MM_PASSWORD = requiredEnv("MM_PASSWORD");
+const TAKER_EMAIL = requiredEnv("TAKER_EMAIL");
+const TAKER_PASSWORD = requiredEnv("TAKER_PASSWORD");
+
+const TOTAL_BIDS = Number(process.env.MM_TOTAL_BIDS ?? 5);
+const TOTAL_ASKS = Number(process.env.MM_TOTAL_ASKS ?? 5);
+const LOOP_INTERVAL_MS = Number(process.env.MM_LOOP_INTERVAL_MS ?? 2000);
+const TRADE_PROBABILITY = Number(process.env.MM_TRADE_PROBABILITY ?? 0.1);
 
 const ACTIVE_MARKETS = [MARKETS.BTC_USDC, MARKETS.ETH_USDC, MARKETS.SOL_USDC];
 
@@ -28,7 +34,7 @@ async function login(email: string, password: string) {
     password,
   });
 
-  return response.data.token;
+  return response.data.accessToken;
 }
 
 async function runMarketLoop(
@@ -48,7 +54,7 @@ async function runMarketLoop(
       );
     }
 
-    await sleep(1000);
+    await sleep(LOOP_INTERVAL_MS);
   }
 }
 
@@ -163,7 +169,7 @@ async function maintainMarket(
   // OCCASIONALLY CREATE A TRADE
   // --------------------------------------------------
 
-  if (Math.random() < 0.3) {
+  if (Math.random() < TRADE_PROBABILITY) {
     const refreshedOrdersResponse = await axios.get(
       `${BASE_URL}/api/v1/order/open?market=${config.symbol}`,
       {
@@ -337,8 +343,12 @@ async function start() {
 
   console.log("✅ Taker bot logged in");
 
-  await seedBotBalances(mmToken, takerToken);
-
+  if (process.env.SEED_BOT_BALANCES === "true") {
+    await seedBotBalances(mmToken, takerToken);
+    console.log("✅ Bot balances ready");
+  } else {
+    console.log("ℹ️ Bot balance seeding skipped");
+  }
   console.log(
     "📈 Active markets:",
     ACTIVE_MARKETS.map((market) => market.symbol),

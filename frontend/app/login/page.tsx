@@ -12,6 +12,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
     setError("");
     if (!email || !password) {
       setError("Email and password are required");
@@ -25,7 +27,10 @@ export default function LoginPage() {
     try {
       // Register first if needed
       if (tab === "register") {
-        const res = await fetch("http://localhost:3000/api/v1/auth/register", {
+        if (!apiUrl) {
+          throw new Error("NEXT_PUBLIC_API_URL is missing");
+        }
+        const res = await fetch(`${apiUrl}/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),

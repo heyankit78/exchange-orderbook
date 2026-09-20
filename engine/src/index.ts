@@ -5,7 +5,15 @@ import { Engine } from "./trade/Engine";
 async function main() {
   const engine = new Engine();
 
-  const redisClient = createClient();
+  const REDIS_URL = process.env.REDIS_URL;
+
+  if (!REDIS_URL) {
+    throw new Error("REDIS_URL is missing");
+  }
+
+  const redisClient = createClient({
+    url: REDIS_URL,
+  });
   await redisClient.connect();
 
   console.log("connected to redis");
@@ -66,7 +74,9 @@ async function main() {
       await engine.process(parsedMessage, streamId);
 
       await redisClient.xAck("messages", "engine-group", streamId);
-
+      await redisClient.xTrim("messages", "MAXLEN", 10_000, {
+        strategyModifier: "~",
+      });
       console.log("RECOVERED + ACKED:", {
         streamId,
         type: parsedMessage.message.type,
@@ -132,6 +142,9 @@ async function main() {
 
       await redisClient.xAck("messages", "engine-group", streamId);
 
+      await redisClient.xTrim("messages", "MAXLEN", 10_000, {
+        strategyModifier: "~",
+      });
       console.log("ACKED:", {
         streamId,
         type: parsedMessage.message.type,

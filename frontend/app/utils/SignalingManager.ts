@@ -1,11 +1,16 @@
 import { IncomingWsMessage, WsMessage } from "@repo/shared";
 import { Ticker } from "./types";
+function requiredPublicEnv(name: string): string {
+  const value = process.env[name];
 
-export const BASE_URL = process.env.NEXT_PUBLIC_WS_URL;
+  if (!value) {
+    throw new Error(`${name} is missing`);
+  }
 
-if (!BASE_URL) {
-  throw new Error("NEXT_PUBLIC_WS_URL is missing");
+  return value;
 }
+
+export const BASE_URL = requiredPublicEnv("NEXT_PUBLIC_WS_URL");
 
 export class SignalingManager {
   private ws: WebSocket;

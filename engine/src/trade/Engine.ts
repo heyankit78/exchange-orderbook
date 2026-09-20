@@ -78,7 +78,9 @@ export class Engine {
       ];
     }
 
-    setInterval(() => this.saveSnapshot(), 3000);
+    if (process.env.WITH_SNAPSHOT === "true") {
+      setInterval(() => this.saveSnapshot(), 30000);
+    }
   }
 
   // ─── PostgreSQL ────────────────────────────────────────────────

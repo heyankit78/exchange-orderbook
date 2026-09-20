@@ -10,7 +10,9 @@ const client = new Client({
   connectionString: DATABASE_URL,
 });
 
-const REFRESH_INTERVAL_MS = 10_000;
+const REFRESH_INTERVAL_MS = Number(
+  process.env.KLINE_REFRESH_INTERVAL_MS ?? 60000,
+);
 
 let isRefreshing = false;
 
