@@ -21,6 +21,26 @@ const orderStatusRank = {
   FILLED: 3,
   CANCELLED: 3,
 } as const;
+
+const QUANTITY_DECIMALS = 8;
+
+function formatQuantity(value: string | number): string {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return "-";
+  }
+
+  const zeroThreshold = 10 ** -QUANTITY_DECIMALS;
+  const normalizedValue =
+    Math.abs(numericValue) < zeroThreshold ? 0 : numericValue;
+
+  return normalizedValue.toLocaleString("en-US", {
+    maximumFractionDigits: QUANTITY_DECIMALS,
+    useGrouping: false,
+  });
+}
+
 type OrderStatus = keyof typeof orderStatusRank;
 type UserOrdersTab = "open" | "history" | "trades";
 
@@ -41,6 +61,7 @@ export function SwapUI({
   const [type, setType] = useState<"limit" | "market">("limit");
 
   const [loading, setLoading] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
   const [balances, setBalances] = useState<Balances | null>(null);
 
   const [balanceLoading, setBalanceLoading] = useState(true);
@@ -265,6 +286,8 @@ export function SwapUI({
   //   }
   // };
   const handleSubmit = async () => {
+    setOrderError(null);
+
     if (!quantity || Number(quantity) <= 0) {
       return;
     }
@@ -344,6 +367,21 @@ export function SwapUI({
       setQuantity("");
     } catch (error) {
       console.error("Order failed:", error);
+      const message =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof error.response === "object" &&
+        error.response !== null &&
+        "data" in error.response &&
+        typeof error.response.data === "object" &&
+        error.response.data !== null &&
+        "message" in error.response.data &&
+        typeof error.response.data.message === "string"
+          ? error.response.data.message
+          : "Unable to place order. Please try again.";
+
+      setOrderError(message);
     } finally {
       setLoading(false);
     }
@@ -620,8 +658,10 @@ export function SwapUI({
 
                 <div>
                   {openOrders.map((order) => {
-                    const remaining =
-                      Number(order.quantity) - Number(order.filled);
+                    const remaining = Math.max(
+                      0,
+                      Number(order.quantity) - Number(order.filled),
+                    );
 
                     const value = Number(order.price) * Number(order.quantity);
 
@@ -649,11 +689,11 @@ export function SwapUI({
 
                         <span>{Number(order.price).toFixed(2)}</span>
 
-                        <span>{Number(order.quantity)}</span>
+                        <span>{formatQuantity(order.quantity)}</span>
 
-                        <span>{Number(order.filled)}</span>
+                        <span>{formatQuantity(order.filled)}</span>
 
-                        <span>{remaining}</span>
+                        <span>{formatQuantity(remaining)}</span>
 
                         <span>{value.toFixed(2)}</span>
 
@@ -742,11 +782,11 @@ export function SwapUI({
                           {Number(order.price).toFixed(2)}
                         </span>
 
-                        <span>{quantity}</span>
+                        <span>{formatQuantity(quantity)}</span>
 
-                        <span>{filled}</span>
+                        <span>{formatQuantity(filled)}</span>
 
-                        <span>{Number(order.remaining)}</span>
+                        <span>{formatQuantity(order.remaining)}</span>
 
                         <span>{value.toFixed(2)}</span>
 
@@ -816,7 +856,7 @@ export function SwapUI({
                           {Number(trade.price).toFixed(2)}
                         </span>
 
-                        <span>{Number(trade.quantity)}</span>
+                        <span>{formatQuantity(trade.quantity)}</span>
 
                         <span className="text-baseTextMedEmphasis">
                           {value.toFixed(2)}
@@ -969,6 +1009,12 @@ export function SwapUI({
               </div>
 
               {/* SUBMIT */}
+
+              {orderError && (
+                <div className="mt-3 rounded-lg border border-redText/40 bg-redText/10 px-3 py-2 text-xs text-redText">
+                  {orderError}
+                </div>
+              )}
 
               <button
                 type="button"

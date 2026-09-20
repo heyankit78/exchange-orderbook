@@ -4,6 +4,7 @@ import {
   CREATE_ORDER,
   CANCEL_ORDER,
   GET_OPEN_ORDERS,
+  MARKETS,
   type MessageToApi,
 } from "@repo/shared";
 import { AuthRequest } from "../middleware/auth";
@@ -16,6 +17,16 @@ const pgClient = new Client({
 });
 
 pgClient.connect();
+
+const configuredPriceBandPercent = Number(
+  process.env.ORDER_PRICE_BAND_PERCENT ?? 5,
+);
+const PRICE_BAND_PERCENT =
+  Number.isFinite(configuredPriceBandPercent) &&
+  configuredPriceBandPercent > 0 &&
+  configuredPriceBandPercent < 100
+    ? configuredPriceBandPercent
+    : 5;
 
 orderRouter.post("/", async (req: AuthRequest, res) => {
   const { market, orderType = "limit", price, quantity, side } = req.body;
@@ -61,6 +72,28 @@ orderRouter.post("/", async (req: AuthRequest, res) => {
       return res.status(400).json({
         message: "Price must be greater than zero",
       });
+    }
+
+    if (orderType === "limit") {
+      const marketConfig = Object.values(MARKETS).find(
+        (config) => config.symbol === market,
+      );
+
+      if (!marketConfig) {
+        return res.status(400).json({
+          message: "Unsupported market",
+        });
+      }
+
+      const bandRatio = PRICE_BAND_PERCENT / 100;
+      const minimumPrice = marketConfig.startPrice * (1 - bandRatio);
+      const maximumPrice = marketConfig.startPrice * (1 + bandRatio);
+
+      if (numericPrice < minimumPrice || numericPrice > maximumPrice) {
+        return res.status(400).json({
+          message: `Limit price must be within ${PRICE_BAND_PERCENT}% of the reference price (${minimumPrice.toFixed(2)}-${maximumPrice.toFixed(2)} ${marketConfig.quoteAsset})`,
+        });
+      }
     }
   }
 
