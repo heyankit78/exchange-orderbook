@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { Client } from "pg";
 
 const DATABASE_URL = process.env.DATABASE_URL;

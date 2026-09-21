@@ -525,8 +525,8 @@ export class Engine {
     // await this.updateDbOrders(order, executedQuantity, fills, market, "limit");
     // await this.publisWsDepthUpdates(fills, price, side, market);
     // await this.publishUserOrderUpdates(order, executedQuantity, fills);
-    // await this.publishWsTrades(side, fills, market);
-    // await this.publishUserTradeUpdates(side, fills, market, takerUserId);
+    await this.publishWsTrades(side, fills, market);
+    await this.publishUserTradeUpdates(side, fills, market, takerUserId);
     return { executedQuantity, fills, orderId: order.orderId };
   }
   private async updateMarketBalance(
