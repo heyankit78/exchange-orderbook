@@ -17,6 +17,15 @@ pgClient.connect();
 const JWT_SECRET = process.env.JWT_SECRET;
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
 
+// This is a demonstration exchange, so every new account receives a
+// non-withdrawable portfolio that can be used to try every configured market.
+const REGISTRATION_DEMO_BALANCES = [
+  { asset: "USDC", amount: "10000000" },
+  { asset: "BTC", amount: "1" },
+  { asset: "ETH", amount: "10" },
+  { asset: "SOL", amount: "100" },
+] as const;
+
 function isStrongPassword(password: string): boolean {
   return (
     password.length >= 8 &&
@@ -89,16 +98,18 @@ authRouter.post("/register", async (req, res) => {
     const user = result.rows[0];
     const userId = String(user.id);
 
-    // Tell engine to give this user initial balance
-    await RedisManager.getInstance().sendAndAwait({
-      type: ON_RAMP,
-      data: {
-        userId,
-        asset: "USDC",
-        amount: "10000000",
-        txnId: crypto.randomUUID(),
-      },
-    });
+    // Tell the engine to create the user's initial demo portfolio.
+    for (const { asset, amount } of REGISTRATION_DEMO_BALANCES) {
+      await RedisManager.getInstance().sendAndAwait({
+        type: ON_RAMP,
+        data: {
+          userId,
+          asset,
+          amount,
+          txnId: crypto.randomUUID(),
+        },
+      });
+    }
 
     console.log(`User registered: ${email} (id: ${userId})`);
 

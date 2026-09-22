@@ -42,7 +42,7 @@ export default function Page() {
           flex flex-1 flex-col
           lg:grid lg:h-[calc(100%-61px)] lg:min-h-0
           lg:grid-cols-[minmax(0,1fr)_340px]
-          lg:grid-rows-[minmax(0,1fr)_300px]
+          lg:grid-rows-[minmax(0,1fr)_220px]
           lg:overflow-hidden
         "
       >
@@ -102,7 +102,7 @@ export default function Page() {
           id="user-orders-panel"
           className="
             order-3
-            h-[420px]
+            h-[300px]
             border-t border-baseBorderLight bg-baseBackgroundL1
             lg:order-none lg:col-start-1 lg:row-start-2
             lg:h-auto lg:min-h-0 lg:overflow-hidden

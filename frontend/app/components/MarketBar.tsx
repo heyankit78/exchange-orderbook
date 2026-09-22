@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Ticker } from "../utils/types";
 import { getTicker } from "../utils/httpClient";
 import { SignalingManager } from "../utils/SignalingManager";
+import { AssetIcon } from "./AssetIcon";
 
 export const MarketBar = ({ market }: { market: string }) => {
   const [ticker, setTicker] = useState<Ticker | null>(null);
@@ -130,7 +131,7 @@ export const MarketBar = ({ market }: { market: string }) => {
               {formatNumber(ticker?.lastPrice)}
             </p>
 
-            <p className="text-xs tabular-nums text-baseTextMedEmphasis">
+            <p className="text-[13px] tabular-nums text-baseTextMedEmphasis">
               {formatNumber(ticker?.lastPrice)}
             </p>
           </div>
@@ -139,7 +140,7 @@ export const MarketBar = ({ market }: { market: string }) => {
 
           <StatItem label="24H Change">
             <p
-              className={`mt-1 text-xs font-medium tabular-nums ${
+              className={`mt-1 text-[13px] font-medium tabular-nums ${
                 priceChange >= 0 ? "text-greenText" : "text-redText"
               }`}
             >
@@ -154,7 +155,7 @@ export const MarketBar = ({ market }: { market: string }) => {
           {/* HIGH */}
 
           <StatItem label="24H High">
-            <p className="mt-1 text-xs font-medium tabular-nums text-baseTextHighEmphasis">
+            <p className="mt-1 text-[13px] font-medium tabular-nums text-baseTextHighEmphasis">
               {formatNumber(ticker?.high)}
             </p>
           </StatItem>
@@ -162,7 +163,7 @@ export const MarketBar = ({ market }: { market: string }) => {
           {/* LOW */}
 
           <StatItem label="24H Low">
-            <p className="mt-1 text-xs font-medium tabular-nums text-baseTextHighEmphasis">
+            <p className="mt-1 text-[13px] font-medium tabular-nums text-baseTextHighEmphasis">
               {formatNumber(ticker?.low)}
             </p>
           </StatItem>
@@ -170,7 +171,7 @@ export const MarketBar = ({ market }: { market: string }) => {
           {/* VOLUME */}
 
           <StatItem label="24H Volume">
-            <p className="mt-1 text-xs font-medium tabular-nums text-baseTextHighEmphasis">
+            <p className="mt-1 text-[13px] font-medium tabular-nums text-baseTextHighEmphasis">
               {formatNumber(ticker?.volume, 4)}
             </p>
           </StatItem>
@@ -189,7 +190,7 @@ function StatItem({
 }) {
   return (
     <div className="flex min-w-0 flex-col justify-center">
-      <p className="text-[10px] text-baseTextMedEmphasis sm:text-[11px]">
+      <p className="text-[11px] text-baseTextMedEmphasis sm:text-xs">
         {label}
       </p>
 
@@ -206,20 +207,16 @@ function Ticker({ market }: { market: string }) {
       {/* LOGOS */}
 
       <div className="flex items-center">
-        <img
-          alt={`${base} Logo`}
-          loading="lazy"
-          decoding="async"
-          className="z-10 h-7 w-7 rounded-full border-2 border-baseBackgroundL1"
-          src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTVvBqZC_Q1TSYObZaMvK0DRFeHZDUtVMh08Q&s"
+        <AssetIcon
+          asset={base}
+          size={30}
+          className="z-10 border-2 border-baseBackgroundL1"
         />
 
-        <img
-          alt={`${quote} Logo`}
-          loading="lazy"
-          decoding="async"
-          className="-ml-2 h-7 w-7 rounded-full border-2 border-baseBackgroundL1"
-          src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTVvBqZC_Q1TSYObZaMvK0DRFeHZDUtVMh08Q&s"
+        <AssetIcon
+          asset={quote}
+          size={30}
+          className="-ml-2 border-2 border-baseBackgroundL1"
         />
       </div>
 
@@ -228,7 +225,7 @@ function Ticker({ market }: { market: string }) {
           {base} / {quote}
         </p>
 
-        <p className="text-[10px] text-baseTextMedEmphasis">Spot</p>
+        <p className="text-[11px] text-baseTextMedEmphasis">Spot</p>
       </div>
     </div>
   );

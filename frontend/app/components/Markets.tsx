@@ -8,6 +8,7 @@ import { MARKETS } from "@repo/shared";
 import type { Ticker } from "../utils/types";
 import { getTickers } from "../utils/httpClient";
 import { SignalingManager } from "../utils/SignalingManager";
+import { AssetIcon } from "./AssetIcon";
 
 const ACTIVE_MARKETS = [
   MARKETS.BTC_USDC.symbol,
@@ -180,9 +181,7 @@ export const Markets = () => {
 
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-baseBackgroundL2 text-sm font-bold text-white">
-                      {base?.[0]}
-                    </div>
+                    <AssetIcon asset={base} size={40} />
 
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-white">
@@ -301,9 +300,7 @@ export const Markets = () => {
 
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-baseBackgroundL2 text-sm font-bold text-white">
-                          {base?.[0]}
-                        </div>
+                        <AssetIcon asset={base} size={36} />
 
                         <div>
                           <p className="text-sm font-semibold text-white">

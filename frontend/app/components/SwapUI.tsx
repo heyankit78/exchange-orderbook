@@ -746,7 +746,7 @@ export function SwapUI({
                   <span>Status</span>
                 </div>
 
-                <div className="h-[190px] overflow-y-auto overflow-x-hidden pr-2 [scrollbar-width:thin] [scrollbar-color:#4b5563_transparent]">
+                <div className="h-[180px] overflow-y-auto overflow-x-hidden pr-2 lg:h-[110px] [scrollbar-width:thin] [scrollbar-color:#4b5563_transparent]">
                   {orderHistory.map((order) => {
                     const orderPrice = Number(order.price);
                     const filled = Number(order.filled);
@@ -826,7 +826,7 @@ export function SwapUI({
                   <span>Time</span>
                 </div>
 
-                <div className="h-[190px] overflow-y-auto overflow-x-hidden pr-2 [scrollbar-width:thin] [scrollbar-color:#4b5563_transparent]">
+                <div className="h-[180px] overflow-y-auto overflow-x-hidden pr-2 lg:h-[110px] [scrollbar-width:thin] [scrollbar-color:#4b5563_transparent]">
                   {myTrades.map((trade) => {
                     const value = Number(trade.price) * Number(trade.quantity);
 
@@ -994,18 +994,6 @@ export function SwapUI({
                   </p>
                 </div>
 
-                {/* PERCENTAGE BUTTONS */}
-
-                <div className="grid grid-cols-4 gap-2 mt-2 sm:flex sm:justify-center sm:gap-3">
-                  {["25%", "50%", "75%", "Max"].map((item) => (
-                    <div
-                      key={item}
-                      className="flex items-center justify-center rounded-full px-3 py-2 sm:px-[16px] sm:py-[6px] text-[13px] sm:text-xs font-medium cursor-pointer bg-baseBackgroundL2 hover:bg-baseBackgroundL3 active:scale-95 transition text-baseTextMedEmphasis"
-                    >
-                      {item}
-                    </div>
-                  ))}
-                </div>
               </div>
 
               {/* SUBMIT */}

@@ -28,6 +28,10 @@ const ACTIVE_MARKETS = [MARKETS.BTC_USDC, MARKETS.ETH_USDC, MARKETS.SOL_USDC];
 
 type MarketConfig = (typeof ACTIVE_MARKETS)[number];
 
+// Keep a continuously moving fair price for each market. Previously every
+// loop started again at startPrice, which made production candles nearly flat.
+const fairPrices = new Map<string, number>();
+
 type BotSession = {
   email: string;
   password: string;
@@ -134,9 +138,6 @@ async function maintainMarket(
   mmToken: string,
   takerToken: string,
 ) {
-  const price =
-    config.startPrice + (Math.random() - 0.5) * config.minuteVolatility;
-
   // --------------------------------------------------
   // GET MM OPEN ORDERS
   // --------------------------------------------------
@@ -151,6 +152,8 @@ async function maintainMarket(
   );
 
   const openOrders = openOrdersResponse.data;
+
+  const price = getNextFairPrice(config, openOrders);
 
   const totalBids = openOrders.filter((o: any) => o.side === "buy").length;
 
@@ -439,6 +442,43 @@ async function start() {
       runMarketLoop(config, mmSession, takerSession),
     ),
   );
+}
+
+function getNextFairPrice(config: MarketConfig, openOrders: any[]): number {
+  let previousPrice = fairPrices.get(config.symbol);
+
+  // After an MM restart, continue near the existing book instead of jumping
+  // back to the configured start price.
+  if (previousPrice === undefined) {
+    const bids = openOrders
+      .filter((order: any) => order.side === "buy")
+      .map((order: any) => Number(order.price))
+      .filter(Number.isFinite);
+
+    const asks = openOrders
+      .filter((order: any) => order.side === "sell")
+      .map((order: any) => Number(order.price))
+      .filter(Number.isFinite);
+
+    const bestBid = bids.length > 0 ? Math.max(...bids) : undefined;
+    const bestAsk = asks.length > 0 ? Math.min(...asks) : undefined;
+
+    previousPrice =
+      bestBid !== undefined && bestAsk !== undefined
+        ? (bestBid + bestAsk) / 2
+        : config.startPrice;
+  }
+
+  const randomStep = (Math.random() - 0.5) * config.tickVolatility;
+  const meanReversion = (config.startPrice - previousPrice) * 0.0005;
+  const nextPrice = Math.max(
+    config.minPrice,
+    Math.min(config.maxPrice, previousPrice + randomStep + meanReversion),
+  );
+
+  fairPrices.set(config.symbol, nextPrice);
+
+  return nextPrice;
 }
 
 start().catch((error) => {

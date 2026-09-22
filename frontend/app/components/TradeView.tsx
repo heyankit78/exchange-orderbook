@@ -416,9 +416,9 @@ export function TradeView({ market }: { market: string }) {
           min-h-[320px]
           sm:min-h-[380px]
           md:min-h-[420px]
-          lg:min-h-[500px]
+          lg:min-h-0
         "
-        />
+      />
       </div>
     </div>
   );
